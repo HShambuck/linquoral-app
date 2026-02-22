@@ -299,16 +299,6 @@ const VoiceRecorder = ({
     setPhase(PHASES.PROCESSING);
   }, []);
 
-  // Expose methods via ref if needed
-  React.useImperativeHandle(
-    React.forwardRef((props, ref) => ref),
-    () => ({
-      reset,
-      setDone,
-      setProcessing,
-    })
-  );
-
   /**
    * Render idle state
    */

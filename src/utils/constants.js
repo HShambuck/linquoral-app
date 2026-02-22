@@ -60,12 +60,31 @@ export const TONE_DESCRIPTIONS = {
 };
 
 // ─── API ───────────────────────────────────────────────────────────────────
+// Determine API base URL based on environment
+const getApiBaseUrl = () => {
+  // For development, use your local machine's IP
+  // Find your IP: 
+  // - Windows: ipconfig (look for IPv4 Address)
+  // - Mac/Linux: ifconfig (look for inet)
+  // - Or use: http://localhost:3000/api for web testing
+  
+  if (__DEV__) {
+    // REPLACE THIS WITH YOUR ACTUAL LOCAL IP ADDRESS
+    // Example: return 'http://192.168.1.100:3000/api';
+    return 'http://192.168.1.97:3000/api'; // Your current IP from Expo
+  }
+  
+  // For production, use your deployed backend URL
+  return 'https://api.linquoral.com'
+};
 
 export const API_CONFIG = {
-  BASE_URL: __DEV__ ? 'http://localhost:3000/api' : 'https://api.linquoral.com',
+  BASE_URL: getApiBaseUrl(),
   TIMEOUT: 30000,
   RETRY_ATTEMPTS: 3,
 };
+
+
 
 // ─── LINKEDIN ──────────────────────────────────────────────────────────────
 

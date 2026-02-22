@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import { useTheme } from '../../src/context/UserContext';
 
 export default function TabLayout() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -16,9 +18,9 @@ export default function TabLayout() {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
           borderTopWidth: 1,
-          height: 80,
+          height: 60 + insets.bottom,
           paddingTop: 10,
-          paddingBottom: 20,
+          paddingBottom: insets.bottom || 10,
         },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textMuted,
@@ -78,7 +80,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -25,
+    marginTop: 15,
     shadowColor: '#4F8EF7',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,

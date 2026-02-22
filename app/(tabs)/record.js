@@ -75,12 +75,15 @@ export default function RecordScreen() {
 
   const handleReviewPost = () => {
     if (currentDraft) {
+      console.log('currentDraft:', currentDraft)
       router.push(`/editor/${currentDraft.id}`);
-    }
+    } else if (currentDraft?._id) {
+    router.push(`/editor/${currentDraft._id}`);
+  }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>

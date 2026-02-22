@@ -40,6 +40,7 @@ const draftService = {
         publishedAt: draft.publishedAt ? new Date(draft.publishedAt) : null,
         audioUri: draft.audioUri,
         audioDurationMs: draft.audioDurationMs,
+        mediaAttachments: draft.mediaAttachments || [],
       })
     );
 
@@ -70,6 +71,7 @@ const draftService = {
       publishedAt: response.draft.publishedAt ? new Date(response.draft.publishedAt) : null,
       audioUri: response.draft.audioUri,
       audioDurationMs: response.draft.audioDurationMs,
+      mediaAttachments: response.draft.mediaAttachments || [],
     });
   },
 
@@ -89,6 +91,7 @@ const draftService = {
     tone = 'Professional',
     audioUri = null,
     audioDurationMs = 0,
+    mediaAttachments = []
   }) => {
     // Generate title from content
     const title = generateTitleFromContent(aiRefinedText || rawTranscript);
@@ -102,6 +105,7 @@ const draftService = {
       status: 'draft',
       audioUri,
       audioDurationMs,
+      mediaAttachments
     });
 
     return createDraft({
@@ -117,6 +121,7 @@ const draftService = {
       publishedAt: null,
       audioUri: response.draft.audioUri,
       audioDurationMs: response.draft.audioDurationMs,
+      mediaAttachments: response.draft.mediaAttachments || [],
     });
   },
 
@@ -145,6 +150,7 @@ const draftService = {
       publishedAt: response.draft.publishedAt ? new Date(response.draft.publishedAt) : null,
       audioUri: response.draft.audioUri,
       audioDurationMs: response.draft.audioDurationMs,
+      mediaAttachments: response.draft.mediaAttachments || [],
     });
   },
 
@@ -278,6 +284,7 @@ const draftService = {
           publishedAt: draft.publishedAt ? new Date(draft.publishedAt) : null,
           audioUri: draft.audioUri,
           audioDurationMs: draft.audioDurationMs,
+          mediaAttachments: response.draft.mediaAttachments || [],
         });
       }
       return null;

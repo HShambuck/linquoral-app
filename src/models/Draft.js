@@ -25,6 +25,7 @@ export const createDraft = ({
   publishedAt = null,
   audioUri = null,
   audioDurationMs = 0,
+  mediaAttachments = []
 }) => ({
   id,
   userId,
@@ -50,6 +51,8 @@ export const createDraft = ({
   // Audio reference (optional, for replay)
   audioUri,
   audioDurationMs,
+
+  mediaAttachments
 });
 
 /**

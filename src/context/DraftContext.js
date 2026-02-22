@@ -1,15 +1,16 @@
 // src/context/DraftContext.js
 
 import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useReducer,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useReducer,
 } from "react";
 import aiService from "../services/aiService";
 import draftService from "../services/draftService";
 import { useAuth } from "./AuthContext";
+import publishService from "../services/publishService";
 
 /**
  * Draft state structure
@@ -55,6 +56,10 @@ const DRAFT_ACTIONS = {
   SET_STATS: "SET_STATS",
   SET_FILTER: "SET_FILTER",
   CLEAR_ERROR: "CLEAR_ERROR",
+
+  UPLOAD_MEDIA_START: "UPLOAD_MEDIA_START",
+  UPLOAD_MEDIA_SUCCESS: "UPLOAD_MEDIA_SUCCESS",
+  UPLOAD_MEDIA_FAIL: "UPLOAD_MEDIA_FAIL",
 };
 
 /**
@@ -193,6 +198,13 @@ const draftReducer = (state, action) => {
         ...state,
         error: null,
       };
+
+    case DRAFT_ACTIONS.UPLOAD_MEDIA_START:
+      return { ...state, isProcessing: true };
+
+    case DRAFT_ACTIONS.UPLOAD_MEDIA_SUCCESS:
+    case DRAFT_ACTIONS.UPLOAD_MEDIA_FAIL:
+      return { ...state, isProcessing: false };
 
     default:
       return state;
@@ -508,7 +520,20 @@ export const DraftProvider = ({ children }) => {
     clearCurrentDraft,
     setFilter,
     clearError,
+    uploadMedia,
   };
+
+  const uploadMedia = useCallback(async (uri, type, mimeType) => {
+    dispatch({ type: DRAFT_ACTIONS.UPLOAD_MEDIA_START });
+    try {
+      const result = await publishService.uploadMedia(uri, type, mimeType);
+      dispatch({ type: DRAFT_ACTIONS.UPLOAD_MEDIA_SUCCESS });
+      return { assetUrn: result.assetUrn };
+    } catch (error) {
+      dispatch({ type: DRAFT_ACTIONS.UPLOAD_MEDIA_FAIL });
+      throw error;
+    }
+  }, []);
 
   return (
     <DraftContext.Provider value={value}>{children}</DraftContext.Provider>

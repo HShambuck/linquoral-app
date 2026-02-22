@@ -1,16 +1,11 @@
 // app/(tabs)/drafts.js
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  FlatList,
-  RefreshControl,
-  Alert,
+  View, Text, TouchableOpacity, StyleSheet,
+  FlatList, RefreshControl, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/UserContext';
 import { useDrafts } from '../../src/context/DraftContext';
@@ -24,25 +19,13 @@ const FILTERS = [
 
 export default function DraftsScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
-  const {
-    drafts,
-    filteredDrafts,
-    filter,
-    setFilter,
-    fetchDrafts,
-    deleteDraft,
-    setCurrentDraft,
-    isLoading,
-  } = useDrafts();
-
+  const { theme, isDarkMode } = useTheme();
+  const { drafts, filteredDrafts, filter, setFilter, fetchDrafts, deleteDraft, setCurrentDraft } = useDrafts();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const styles = createStyles(theme, isDarkMode, insets);
 
-  const styles = createStyles(theme);
-
-  useEffect(() => {
-    fetchDrafts();
-  }, []);
+  useEffect(() => { fetchDrafts(); }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -56,137 +39,110 @@ export default function DraftsScreen() {
   };
 
   const handleDraftLongPress = (draft) => {
-    Alert.alert(
-      'Draft Options',
-      `"${draft.title || 'Untitled Draft'}"`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => confirmDelete(draft),
-        },
-      ]
-    );
-  };
-
-  const confirmDelete = (draft) => {
-    Alert.alert(
-      'Delete Draft?',
-      'This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await deleteDraft(draft.id);
-            if (!result.success) {
-              Alert.alert('Error', 'Failed to delete draft.');
-            }
+    Alert.alert(`"${draft.title || 'Untitled Draft'}"`, 'Choose an action', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: () => Alert.alert('Delete Draft?', 'This cannot be undone.', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete', style: 'destructive',
+            onPress: async () => {
+              const r = await deleteDraft(draft.id);
+              if (!r.success) Alert.alert('Error', 'Failed to delete draft.');
+            },
           },
-        },
-      ]
-    );
+        ]),
+      },
+    ]);
   };
 
-  const handleFilterChange = (filterKey) => {
-    setFilter(filterKey);
+  const counts = {
+    all: drafts.length,
+    draft: drafts.filter((d) => d.status === 'draft').length,
+    scheduled: drafts.filter((d) => d.status === 'scheduled').length,
   };
 
-  const renderDraftItem = ({ item }) => (
-    <DraftCard
-      draft={item}
-      onPress={() => handleDraftPress(item)}
-      onLongPress={() => handleDraftLongPress(item)}
-    />
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>📝</Text>
-      <Text style={styles.emptyTitle}>No drafts yet</Text>
-      <Text style={styles.emptySubtitle}>
-        {filter === 'all'
-          ? 'Start by recording your first voice post'
-          : filter === 'draft'
-          ? 'No drafts in progress'
-          : 'No scheduled posts'}
+  const renderEmpty = () => (
+    <View style={styles.emptyWrap}>
+      <View style={styles.emptyIconWrap}>
+        <View style={styles.emptyIconLine} />
+        <View style={[styles.emptyIconLine, styles.emptyIconLineShort]} />
+        <View style={styles.emptyIconLine} />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {filter === 'scheduled' ? 'No scheduled posts' : 'No drafts yet'}
+      </Text>
+      <Text style={styles.emptySub}>
+        {filter === 'all' ? 'Record your first voice post to get started' : ''}
       </Text>
       {filter === 'all' && (
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/record')}
-          style={styles.emptyButton}
+          style={styles.emptyBtn}
           activeOpacity={0.8}
         >
-          <Text style={styles.emptyButtonText}>Create Voice Post</Text>
+          <Text style={styles.emptyBtnText}>Create Voice Post</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 
-  const getCounts = () => {
-    const draftCount = drafts.filter((d) => d.status === 'draft').length;
-    const scheduledCount = drafts.filter((d) => d.status === 'scheduled').length;
-    return {
-      all: drafts.length,
-      draft: draftCount,
-      scheduled: scheduledCount,
-    };
-  };
-
-  const counts = getCounts();
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        <Text style={styles.title}>Your Drafts</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Drafts</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{drafts.length}</Text>
+          </View>
+        </View>
 
-        {/* Filter Tabs */}
-        <View style={styles.filterContainer}>
+        {/* Filter */}
+        <View style={styles.filterRow}>
           {FILTERS.map((f) => (
             <TouchableOpacity
               key={f.key}
-              onPress={() => handleFilterChange(f.key)}
-              style={[
-                styles.filterTab,
-                filter === f.key && styles.filterTabActive,
-              ]}
+              onPress={() => setFilter(f.key)}
+              style={[styles.filterTab, filter === f.key && styles.filterTabActive]}
               activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  filter === f.key && styles.filterTabTextActive,
-                ]}
-              >
+              <Text style={[styles.filterTabText, filter === f.key && styles.filterTabTextActive]}>
                 {f.label}
-                {counts[f.key] > 0 && (
-                  <Text style={styles.filterCount}> ({counts[f.key]})</Text>
-                )}
               </Text>
+              {counts[f.key] > 0 && (
+                <View style={[styles.filterBadge, filter === f.key && styles.filterBadgeActive]}>
+                  <Text style={[styles.filterBadgeText, filter === f.key && styles.filterBadgeTextActive]}>
+                    {counts[f.key]}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Draft List */}
+        {/* List */}
         <FlatList
           data={filteredDrafts}
-          renderItem={renderDraftItem}
+          renderItem={({ item }) => (
+            <DraftCard
+              draft={item}
+              onPress={() => handleDraftPress(item)}
+              onLongPress={() => handleDraftLongPress(item)}
+            />
+          )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
-            styles.listContent,
-            filteredDrafts.length === 0 && styles.listContentEmpty,
+            styles.list,
+            filteredDrafts.length === 0 && styles.listEmpty,
+            { paddingBottom: insets.bottom + 24 },
           ]}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListEmptyComponent={renderEmptyState}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          ListEmptyComponent={renderEmpty}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.primary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
           }
         />
       </View>
@@ -194,94 +150,90 @@ export default function DraftsScreen() {
   );
 }
 
-const createStyles = (theme) =>
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.bg,
-    },
-    container: {
-      flex: 1,
-      padding: 20,
-      paddingBottom: 0,
-    },
-    title: {
-      fontSize: 22,
-      fontWeight: '700',
-      color: theme.text,
-      marginBottom: 20,
-    },
-    filterContainer: {
-      flexDirection: 'row',
-      backgroundColor: theme.surface,
-      borderRadius: 12,
-      padding: 4,
-      borderWidth: 1,
-      borderColor: theme.border,
-      marginBottom: 20,
-    },
-    filterTab: {
-      flex: 1,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 9,
-      alignItems: 'center',
-    },
-    filterTabActive: {
-      backgroundColor: theme.primary,
-    },
-    filterTabText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: theme.textMuted,
-    },
-    filterTabTextActive: {
-      color: '#fff',
-    },
-    filterCount: {
-      fontWeight: '400',
-    },
-    listContent: {
-      paddingBottom: 20,
-    },
-    listContentEmpty: {
-      flex: 1,
-    },
-    separator: {
-      height: 12,
-    },
-    emptyContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 40,
-    },
-    emptyIcon: {
-      fontSize: 48,
-      marginBottom: 16,
-    },
-    emptyTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: theme.text,
-      marginBottom: 8,
-    },
-    emptySubtitle: {
-      fontSize: 14,
-      color: theme.textMuted,
-      textAlign: 'center',
-      lineHeight: 20,
-      marginBottom: 24,
-    },
-    emptyButton: {
-      paddingVertical: 14,
-      paddingHorizontal: 24,
-      borderRadius: 14,
-      backgroundColor: theme.primary,
-    },
-    emptyButtonText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: '#fff',
-    },
-  });
+const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: theme.bg },
+  container: { flex: 1, paddingHorizontal: 22, paddingTop: 8 },
+
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    marginBottom: 20, marginTop: 4,
+  },
+  title: {
+    fontSize: 26, fontWeight: '700',
+    color: theme.text, letterSpacing: -0.5, flex: 1,
+  },
+  countBadge: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: theme.surfaceHigh,
+    borderWidth: 1, borderColor: theme.border,
+  },
+  countBadgeText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+
+  filterRow: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 4,
+    marginBottom: 18,
+    gap: 4,
+  },
+  filterTab: {
+    flex: 1, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 9, borderRadius: 10,
+    gap: 6,
+  },
+  filterTabActive: { backgroundColor: theme.primary },
+  filterTabText: { fontSize: 13, fontWeight: '600', color: theme.textMuted },
+  filterTabTextActive: { color: '#fff' },
+  filterBadge: {
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: theme.surfaceHigh,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  filterBadgeText: { fontSize: 10, fontWeight: '700', color: theme.textMuted },
+  filterBadgeTextActive: { color: '#fff' },
+
+  list: { paddingTop: 2 },
+  listEmpty: { flex: 1 },
+
+  emptyWrap: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 40, paddingBottom: 60,
+  },
+  emptyIconWrap: {
+    width: 52, height: 52,
+    justifyContent: 'center', alignItems: 'flex-start',
+    gap: 8, marginBottom: 24,
+    padding: 10,
+    backgroundColor: theme.surface,
+    borderRadius: 16,
+    borderWidth: 1, borderColor: theme.border,
+  },
+  emptyIconLine: {
+    height: 2.5, width: 32,
+    backgroundColor: theme.border,
+    borderRadius: 2,
+  },
+  emptyIconLineShort: { width: 20 },
+  emptyTitle: {
+    fontSize: 17, fontWeight: '600',
+    color: theme.text, marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySub: {
+    fontSize: 13, color: theme.textMuted,
+    textAlign: 'center', lineHeight: 19,
+    marginBottom: 28,
+  },
+  emptyBtn: {
+    paddingVertical: 14, paddingHorizontal: 28,
+    borderRadius: 14, backgroundColor: theme.primary,
+  },
+  emptyBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+});

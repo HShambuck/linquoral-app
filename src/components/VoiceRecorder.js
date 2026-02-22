@@ -1,50 +1,18 @@
 // src/components/VoiceRecorder.js
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Animated,
-  Platform,
+  View, Text, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { useTheme } from '../context/UserContext';
 import { formatDuration, validateRecordingDuration } from '../utils/validators';
 import { RECORDING_CONFIG } from '../utils/constants';
 
-/**
- * Recording phases
- */
-const PHASES = {
-  IDLE: 'idle',
-  RECORDING: 'recording',
-  PROCESSING: 'processing',
-  DONE: 'done',
-  ERROR: 'error',
-};
+const PHASES = { IDLE: 'idle', RECORDING: 'recording', PROCESSING: 'processing', DONE: 'done', ERROR: 'error' };
 
-/**
- * VoiceRecorder Component
- * 
- * Voice-first recording interface for capturing user speech.
- * Handles audio recording, visualization, and state management.
- * 
- * @param {Object} props
- * @param {function} props.onRecordingComplete - Callback with audio URI when done
- * @param {function} props.onProcessingStart - Callback when processing begins
- * @param {function} props.onError - Callback for errors
- * @param {string} props.processingMessage - Custom processing message
- */
-const VoiceRecorder = ({
-  onRecordingComplete,
-  onProcessingStart,
-  onError,
-  processingMessage = 'Refining your post...',
-}) => {
-  const { theme } = useTheme();
-  const styles = createStyles(theme);
+const VoiceRecorder = ({ onRecordingComplete, onProcessingStart, onError, processingMessage = 'Refining your post...' }) => {
+  const { theme, isDarkMode } = useTheme();
+  const styles = createStyles(theme, isDarkMode);
 
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [duration, setDuration] = useState(0);
@@ -53,150 +21,108 @@ const VoiceRecorder = ({
   const recordingRef = useRef(null);
   const durationIntervalRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const waveformValues = useRef(
-    Array.from({ length: 24 }, () => new Animated.Value(4))
-  ).current;
+  const pulseOpacity = useRef(new Animated.Value(0.4)).current;
+  const waveformValues = useRef(Array.from({ length: 20 }, () => new Animated.Value(3))).current;
+  const dotAnim = useRef([
+    new Animated.Value(0.3),
+    new Animated.Value(0.3),
+    new Animated.Value(0.3),
+  ]).current;
 
-  /**
-   * Setup audio on mount
-   */
   useEffect(() => {
-    const setupAudio = async () => {
-      try {
-        await Audio.requestPermissionsAsync();
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-      } catch (error) {
-        console.warn('Audio setup error:', error);
-      }
-    };
-
-    setupAudio();
-
-    return () => {
-      stopRecording();
-    };
+    Audio.requestPermissionsAsync();
+    Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+    return () => { stopRecording(); };
   }, []);
 
-  /**
-   * Pulse animation for recording state
-   */
   useEffect(() => {
     if (phase === PHASES.RECORDING) {
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
+          Animated.parallel([
+            Animated.timing(pulseAnim, { toValue: 1.18, duration: 900, useNativeDriver: true }),
+            Animated.timing(pulseOpacity, { toValue: 0.15, duration: 900, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+            Animated.timing(pulseOpacity, { toValue: 0.4, duration: 900, useNativeDriver: true }),
+          ]),
         ])
       );
       pulse.start();
-
-      // Animate waveform
-      const animateWaveform = () => {
-        waveformValues.forEach((anim, index) => {
+      const waveInterval = setInterval(() => {
+        waveformValues.forEach((anim) => {
           Animated.timing(anim, {
-            toValue: Math.random() * 32 + 4,
-            duration: 150,
-            useNativeDriver: false,
+            toValue: Math.random() * 28 + 3,
+            duration: 120, useNativeDriver: false,
           }).start();
         });
+      }, 120);
+      return () => { pulse.stop(); clearInterval(waveInterval); };
+    }
+    if (phase === PHASES.PROCESSING) {
+      const animateDots = () => {
+        dotAnim.forEach((anim, i) => {
+          Animated.sequence([
+            Animated.delay(i * 180),
+            Animated.loop(
+              Animated.sequence([
+                Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+                Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
+              ])
+            ),
+          ]).start();
+        });
       };
-      const waveformInterval = setInterval(animateWaveform, 150);
-
-      return () => {
-        pulse.stop();
-        clearInterval(waveformInterval);
-      };
+      animateDots();
     }
   }, [phase]);
 
-  /**
-   * Start recording
-   */
   const startRecording = async () => {
     try {
       setErrorMessage(null);
-
       const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        throw new Error('Microphone permission is required');
-      }
-
-      // Configure recording
+      if (status !== 'granted') throw new Error('Microphone permission required');
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync({
         android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          extension: '.m4a', outputFormat: Audio.AndroidOutputFormat.MPEG_4,
           audioEncoder: Audio.AndroidAudioEncoder.AAC,
           sampleRate: RECORDING_CONFIG.SAMPLE_RATE,
           numberOfChannels: RECORDING_CONFIG.CHANNELS,
           bitRate: RECORDING_CONFIG.BIT_RATE,
         },
         ios: {
-          extension: '.m4a',
-          audioQuality: Audio.IOSAudioQuality.HIGH,
+          extension: '.m4a', audioQuality: Audio.IOSAudioQuality.HIGH,
           sampleRate: RECORDING_CONFIG.SAMPLE_RATE,
           numberOfChannels: RECORDING_CONFIG.CHANNELS,
           bitRate: RECORDING_CONFIG.BIT_RATE,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
+          linearPCMBitDepth: 16, linearPCMIsBigEndian: false, linearPCMIsFloat: false,
         },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: RECORDING_CONFIG.BIT_RATE,
-        },
+        web: { mimeType: 'audio/webm', bitsPerSecond: RECORDING_CONFIG.BIT_RATE },
       });
-
       await recording.startAsync();
       recordingRef.current = recording;
       setPhase(PHASES.RECORDING);
       setDuration(0);
-
-      // Start duration timer
       durationIntervalRef.current = setInterval(() => {
         setDuration((prev) => {
-          const newDuration = prev + 1000;
-          // Auto-stop at max duration
-          if (newDuration >= RECORDING_CONFIG.MAX_DURATION_MS) {
-            stopRecording();
-          }
-          return newDuration;
+          const next = prev + 1000;
+          if (next >= RECORDING_CONFIG.MAX_DURATION_MS) stopRecording();
+          return next;
         });
       }, 1000);
     } catch (error) {
-      console.error('Start recording error:', error);
       setErrorMessage(error.message || 'Failed to start recording');
       setPhase(PHASES.ERROR);
-      if (onError) onError(error);
+      onError?.(error);
     }
   };
 
-  /**
-   * Stop recording
-   */
   const stopRecording = async () => {
     try {
-      // Clear timer
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-        durationIntervalRef.current = null;
-      }
-
+      if (durationIntervalRef.current) { clearInterval(durationIntervalRef.current); durationIntervalRef.current = null; }
       if (!recordingRef.current) return;
-
-      // Validate duration
       const validation = validateRecordingDuration(duration);
       if (!validation.isValid) {
         setErrorMessage(validation.error);
@@ -205,234 +131,133 @@ const VoiceRecorder = ({
         recordingRef.current = null;
         return;
       }
-
-      // Stop recording
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
-
-      // Move to processing phase
       setPhase(PHASES.PROCESSING);
-      if (onProcessingStart) onProcessingStart();
-
-      // Simulate AI processing delay, then callback
-      // In real app, this would be handled by parent component
+      onProcessingStart?.();
       setTimeout(() => {
         setPhase(PHASES.DONE);
-        if (onRecordingComplete) {
-          onRecordingComplete({
-            uri,
-            durationMs: duration,
-          });
-        }
+        onRecordingComplete?.({ uri, durationMs: duration });
       }, 100);
     } catch (error) {
-      console.error('Stop recording error:', error);
       setErrorMessage(error.message || 'Failed to stop recording');
       setPhase(PHASES.ERROR);
-      if (onError) onError(error);
+      onError?.(error);
     }
   };
 
-  /**
-   * Cancel recording
-   */
   const cancelRecording = async () => {
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current);
-    }
-
+    if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     if (recordingRef.current) {
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-      } catch (e) {
-        // Ignore errors on cancel
-      }
+      try { await recordingRef.current.stopAndUnloadAsync(); } catch (e) {}
       recordingRef.current = null;
     }
-
     setPhase(PHASES.IDLE);
     setDuration(0);
     setErrorMessage(null);
   };
 
-  /**
-   * Handle main button press
-   */
   const handlePress = () => {
-    switch (phase) {
-      case PHASES.IDLE:
-      case PHASES.ERROR:
-        startRecording();
-        break;
-      case PHASES.RECORDING:
-        stopRecording();
-        break;
-      case PHASES.DONE:
-        // Reset for new recording
-        setPhase(PHASES.IDLE);
-        setDuration(0);
-        break;
-      default:
-        break;
-    }
+    if (phase === PHASES.IDLE || phase === PHASES.ERROR) startRecording();
+    else if (phase === PHASES.RECORDING) stopRecording();
+    else if (phase === PHASES.DONE) { setPhase(PHASES.IDLE); setDuration(0); }
   };
 
-  /**
-   * Reset to idle state
-   */
-  const reset = useCallback(() => {
-    cancelRecording();
-  }, []);
-
-  /**
-   * Set to done state (called by parent after processing)
-   */
-  const setDone = useCallback(() => {
-    setPhase(PHASES.DONE);
-  }, []);
-
-  /**
-   * Set to processing state (called by parent)
-   */
-  const setProcessing = useCallback(() => {
-    setPhase(PHASES.PROCESSING);
-  }, []);
-
-  /**
-   * Render idle state
-   */
+  // Idle
   const renderIdle = () => (
-    <>
-      <Text style={styles.instructionText}>
-        Tap and speak your thoughts naturally.{'\n'}
-        AI will handle the formatting.
-      </Text>
-
-      <TouchableOpacity
-        onPress={handlePress}
-        style={styles.recordButton}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.recordButtonIcon}>🎙</Text>
+    <View style={styles.stateWrap}>
+      <Text style={styles.idleHint}>Tap to start recording</Text>
+      <TouchableOpacity onPress={handlePress} style={styles.mainButton} activeOpacity={0.85}>
+        <View style={styles.micIcon}>
+          <View style={styles.micBody} />
+          <View style={styles.micNeck} />
+          <View style={styles.micBase} />
+        </View>
       </TouchableOpacity>
-
-      <Text style={styles.hintText}>Tap to start recording</Text>
-    </>
+      <Text style={styles.idleSubHint}>Speak naturally · AI handles formatting</Text>
+    </View>
   );
 
-  /**
-   * Render recording state
-   */
+  // Recording
   const renderRecording = () => (
-    <>
-      {/* Pulse rings */}
-      <View style={styles.pulseContainer}>
-        {[1.6, 1.35, 1.15].map((scale, i) => (
-          <Animated.View
-            key={i}
-            style={[
-              styles.pulseRing,
-              {
-                opacity: 0.08 - i * 0.025,
-                transform: [{ scale: pulseAnim }],
-              },
-            ]}
-          />
-        ))}
+    <View style={styles.stateWrap}>
+      <View style={styles.durationRow}>
+        <View style={styles.recDot} />
+        <Text style={styles.durationText}>{formatDuration(duration)}</Text>
+      </View>
 
-        <TouchableOpacity
-          onPress={handlePress}
-          style={styles.stopButton}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.stopButtonIcon}>⏹</Text>
+      <View style={styles.pulseWrap}>
+        <Animated.View style={[styles.pulseRing, styles.pulseRing1, { transform: [{ scale: pulseAnim }], opacity: pulseOpacity }]} />
+        <Animated.View style={[styles.pulseRing, styles.pulseRing2, { transform: [{ scale: pulseAnim }], opacity: pulseOpacity }]} />
+        <TouchableOpacity onPress={handlePress} style={styles.stopButton} activeOpacity={0.85}>
+          <View style={styles.stopIcon} />
         </TouchableOpacity>
       </View>
 
-      {/* Waveform */}
       <View style={styles.waveform}>
         {waveformValues.map((anim, i) => (
           <Animated.View
             key={i}
-            style={[
-              styles.waveformBar,
-              {
-                height: anim,
-                backgroundColor: theme.primary,
-              },
-            ]}
+            style={[styles.waveBar, { height: anim, opacity: 0.5 + (i % 3) * 0.15 }]}
           />
         ))}
       </View>
 
-      {/* Recording indicator */}
-      <View style={styles.recordingIndicator}>
-        <View style={styles.recordingDot} />
-        <Text style={styles.recordingText}>Recording...</Text>
-        <Text style={styles.durationText}>{formatDuration(duration)}</Text>
-      </View>
-
-      {/* Cancel button */}
-      <TouchableOpacity onPress={cancelRecording} style={styles.cancelButton}>
+      <TouchableOpacity onPress={cancelRecording} style={styles.cancelBtn}>
         <Text style={styles.cancelText}>Cancel</Text>
       </TouchableOpacity>
-    </>
+    </View>
   );
 
-  /**
-   * Render processing state
-   */
+  // Processing
   const renderProcessing = () => (
-    <View style={styles.processingContainer}>
-      <Text style={styles.processingIcon}>✨</Text>
-      <Text style={styles.processingTitle}>{processingMessage}</Text>
-      <Text style={styles.processingSubtitle}>
-        AI is preserving your authentic voice
-      </Text>
-
-      <View style={styles.loadingDots}>
-        {[0, 1, 2].map((i) => (
-          <Animated.View
-            key={i}
-            style={[
-              styles.loadingDot,
-              {
-                opacity: 0.4,
-              },
-            ]}
-          />
-        ))}
+    <View style={styles.stateWrap}>
+      <View style={styles.processingCard}>
+        <View style={styles.processingIconWrap}>
+          <View style={styles.sparkle1} />
+          <View style={styles.sparkle2} />
+          <View style={styles.sparkle3} />
+        </View>
+        <Text style={styles.processingTitle}>{processingMessage}</Text>
+        <Text style={styles.processingSubtitle}>Preserving your authentic voice</Text>
+        <View style={styles.dotsRow}>
+          {dotAnim.map((anim, i) => (
+            <Animated.View key={i} style={[styles.loadingDot, { opacity: anim }]} />
+          ))}
+        </View>
       </View>
     </View>
   );
 
-  /**
-   * Render done state
-   */
+  // Done
   const renderDone = () => (
-    <View style={styles.doneContainer}>
-      <View style={styles.doneIconContainer}>
-        <Text style={styles.doneIcon}>✓</Text>
+    <View style={styles.stateWrap}>
+      <View style={styles.doneCard}>
+        <View style={styles.doneCheckWrap}>
+          <View style={styles.doneCheckLine1} />
+          <View style={styles.doneCheckLine2} />
+        </View>
+        <Text style={styles.doneTitle}>Post ready</Text>
+        <Text style={styles.doneSub}>Review and edit before publishing</Text>
       </View>
-      <Text style={styles.doneTitle}>Post ready!</Text>
-      <Text style={styles.doneSubtitle}>Review and edit before publishing</Text>
     </View>
   );
 
-  /**
-   * Render error state
-   */
+  // Error
   const renderError = () => (
-    <View style={styles.errorContainer}>
-      <View style={styles.errorIconContainer}>
-        <Text style={styles.errorIcon}>!</Text>
+    <View style={styles.stateWrap}>
+      <View style={styles.errorCard}>
+        <View style={styles.errorIconWrap}>
+          <View style={styles.errorLine1} />
+          <View style={styles.errorLine2} />
+        </View>
+        <Text style={styles.errorTitle}>Something went wrong</Text>
+        <Text style={styles.errorMsg}>{errorMessage}</Text>
+        <TouchableOpacity onPress={handlePress} style={styles.retryBtn}>
+          <Text style={styles.retryText}>Try Again</Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.errorTitle}>Something went wrong</Text>
-      <Text style={styles.errorMessage}>{errorMessage}</Text>
-      <TouchableOpacity onPress={handlePress} style={styles.retryButton}>
-        <Text style={styles.retryText}>Try Again</Text>
-      </TouchableOpacity>
     </View>
   );
 
@@ -447,220 +272,115 @@ const VoiceRecorder = ({
   );
 };
 
-const createStyles = (theme) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-    },
+const createStyles = (theme, isDarkMode) => StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  stateWrap: { alignItems: 'center', width: '100%' },
 
-    // Idle state
-    instructionText: {
-      fontSize: 14,
-      color: theme.textMuted,
-      textAlign: 'center',
-      lineHeight: 22,
-      marginBottom: 40,
-    },
-    recordButton: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: theme.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: theme.primary,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.4,
-      shadowRadius: 16,
-      elevation: 8,
-    },
-    recordButtonIcon: {
-      fontSize: 36,
-    },
-    hintText: {
-      fontSize: 13,
-      color: theme.textMuted,
-      marginTop: 20,
-    },
+  // Idle
+  idleHint: { fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textMuted, marginBottom: 32, fontWeight: '500' },
+  mainButton: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: theme.primary,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: theme.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: isDarkMode ? 0.5 : 0.3,
+    shadowRadius: 20, elevation: 10,
+  },
+  micIcon: { alignItems: 'center', justifyContent: 'center' },
+  micBody: {
+    width: 16, height: 22, borderRadius: 8,
+    borderWidth: 2.5, borderColor: '#fff',
+    backgroundColor: 'transparent',
+  },
+  micNeck: {
+    marginTop: 4,
+    width: 20, height: 10,
+    borderTopLeftRadius: 10, borderTopRightRadius: 10,
+    borderWidth: 2.5, borderBottomWidth: 0,
+    borderColor: '#fff', backgroundColor: 'transparent',
+  },
+  micBase: { marginTop: 2, width: 2.5, height: 6, backgroundColor: '#fff', borderRadius: 1 },
+  idleSubHint: { fontSize: 12, color: theme.textMuted, marginTop: 24, textAlign: 'center' },
 
-    // Recording state
-    pulseContainer: {
-      width: 160,
-      height: 160,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 28,
-    },
-    pulseRing: {
-      position: 'absolute',
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: theme.primary,
-    },
-    stopButton: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: theme.danger,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: theme.danger,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.5,
-      shadowRadius: 16,
-      elevation: 8,
-    },
-    stopButtonIcon: {
-      fontSize: 28,
-      color: '#fff',
-    },
-    waveform: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 3,
-      marginBottom: 16,
-      height: 40,
-    },
-    waveformBar: {
-      width: 3,
-      borderRadius: 2,
-      opacity: 0.7,
-    },
-    recordingIndicator: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    recordingDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: theme.danger,
-    },
-    recordingText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: theme.danger,
-    },
-    durationText: {
-      fontSize: 13,
-      color: theme.textMuted,
-      marginLeft: 8,
-    },
-    cancelButton: {
-      marginTop: 24,
-      padding: 10,
-    },
-    cancelText: {
-      fontSize: 13,
-      color: theme.textMuted,
-    },
+  // Recording
+  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 36 },
+  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.danger },
+  durationText: { fontSize: 22, fontWeight: '700', color: theme.text, letterSpacing: 1, fontVariant: ['tabular-nums'] },
 
-    // Processing state
-    processingContainer: {
-      alignItems: 'center',
-    },
-    processingIcon: {
-      fontSize: 48,
-      marginBottom: 20,
-    },
-    processingTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.text,
-      marginBottom: 8,
-    },
-    processingSubtitle: {
-      fontSize: 13,
-      color: theme.textMuted,
-      marginBottom: 24,
-    },
-    loadingDots: {
-      flexDirection: 'row',
-      gap: 6,
-    },
-    loadingDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: theme.primary,
-    },
+  pulseWrap: { width: 130, height: 130, justifyContent: 'center', alignItems: 'center', marginBottom: 28 },
+  pulseRing: { position: 'absolute', borderRadius: 65, backgroundColor: theme.danger },
+  pulseRing1: { width: 130, height: 130 },
+  pulseRing2: { width: 100, height: 100 },
+  stopButton: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: theme.danger,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: theme.danger,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5, shadowRadius: 16, elevation: 8,
+  },
+  stopIcon: { width: 22, height: 22, borderRadius: 4, backgroundColor: '#fff' },
 
-    // Done state
-    doneContainer: {
-      alignItems: 'center',
-    },
-    doneIconContainer: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: theme.accentGlow,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    doneIcon: {
-      fontSize: 28,
-      color: theme.accent,
-    },
-    doneTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.accent,
-      marginBottom: 8,
-    },
-    doneSubtitle: {
-      fontSize: 13,
-      color: theme.textMuted,
-    },
+  waveform: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 44, marginBottom: 24 },
+  waveBar: { width: 3, borderRadius: 2, backgroundColor: theme.primary },
 
-    // Error state
-    errorContainer: {
-      alignItems: 'center',
-    },
-    errorIconContainer: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: `${theme.danger}20`,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    errorIcon: {
-      fontSize: 28,
-      color: theme.danger,
-      fontWeight: '700',
-    },
-    errorTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.danger,
-      marginBottom: 8,
-    },
-    errorMessage: {
-      fontSize: 13,
-      color: theme.textMuted,
-      textAlign: 'center',
-      marginBottom: 24,
-    },
-    retryButton: {
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      backgroundColor: theme.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    retryText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.text,
-    },
-  });
+  cancelBtn: { paddingVertical: 10, paddingHorizontal: 24 },
+  cancelText: { fontSize: 13, color: theme.textMuted },
+
+  // Processing
+  processingCard: { alignItems: 'center', padding: 32 },
+  processingIconWrap: {
+    width: 60, height: 60,
+    borderRadius: 20,
+    backgroundColor: theme.accentGlow,
+    borderWidth: 1, borderColor: `${theme.accent}30`,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20,
+  },
+  sparkle1: { position: 'absolute', width: 14, height: 14, borderRadius: 2, backgroundColor: theme.accent, transform: [{ rotate: '45deg' }], top: 10, left: 10 },
+  sparkle2: { position: 'absolute', width: 8, height: 8, borderRadius: 1.5, backgroundColor: theme.accent, opacity: 0.6, transform: [{ rotate: '45deg' }], bottom: 12, right: 10 },
+  sparkle3: { position: 'absolute', width: 6, height: 6, borderRadius: 1, backgroundColor: theme.accent, opacity: 0.4, transform: [{ rotate: '45deg' }], top: 12, right: 14 },
+  processingTitle: { fontSize: 16, fontWeight: '600', color: theme.text, marginBottom: 6, letterSpacing: -0.2 },
+  processingSubtitle: { fontSize: 12, color: theme.textMuted, marginBottom: 24 },
+  dotsRow: { flexDirection: 'row', gap: 8 },
+  loadingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent },
+
+  // Done
+  doneCard: { alignItems: 'center', padding: 32 },
+  doneCheckWrap: {
+    width: 60, height: 60,
+    borderRadius: 20,
+    backgroundColor: theme.accentGlow,
+    borderWidth: 1, borderColor: `${theme.accent}30`,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20,
+  },
+  doneCheckLine1: { position: 'absolute', width: 12, height: 3, backgroundColor: theme.accent, borderRadius: 1.5, transform: [{ rotate: '45deg' }, { translateX: -4 }, { translateY: 2 }] },
+  doneCheckLine2: { position: 'absolute', width: 20, height: 3, backgroundColor: theme.accent, borderRadius: 1.5, transform: [{ rotate: '-50deg' }, { translateX: 4 }] },
+  doneTitle: { fontSize: 18, fontWeight: '700', color: theme.accent, marginBottom: 6, letterSpacing: -0.3 },
+  doneSub: { fontSize: 12, color: theme.textMuted },
+
+  // Error
+  errorCard: { alignItems: 'center', padding: 32 },
+  errorIconWrap: {
+    width: 60, height: 60, borderRadius: 20,
+    backgroundColor: theme.dangerGlow,
+    borderWidth: 1, borderColor: `${theme.danger}30`,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20,
+  },
+  errorLine1: { position: 'absolute', width: 24, height: 3, backgroundColor: theme.danger, borderRadius: 1.5, transform: [{ rotate: '45deg' }] },
+  errorLine2: { position: 'absolute', width: 24, height: 3, backgroundColor: theme.danger, borderRadius: 1.5, transform: [{ rotate: '-45deg' }] },
+  errorTitle: { fontSize: 16, fontWeight: '600', color: theme.danger, marginBottom: 6 },
+  errorMsg: { fontSize: 12, color: theme.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 18 },
+  retryBtn: {
+    paddingVertical: 11, paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: theme.surface,
+    borderWidth: 1.5, borderColor: theme.border,
+  },
+  retryText: { fontSize: 13, fontWeight: '600', color: theme.text },
+});
 
 export default VoiceRecorder;

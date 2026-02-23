@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "linquoral-app",
-    "slug": "linquoral-app",
+    "name": "linqoral",
+    "slug": "linqoral-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "scheme": "linquoralapp",
+    "icon": "./assets/linquoral_logo.jpg",
+    "scheme": "linqoral",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -14,9 +14,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/linquoral_logo.jpg",
+        "backgroundImage": "./assets/linquoral_logo.jpg",
+        "monochromeImage": "./assets/linquoral_logo.jpg"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -30,7 +30,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Linquoral to attach photos to your posts.",
+          "photosPermission": "Allow Linqoral to attach photos to your posts.",
           "cameraPermission": false
         }
       ],
@@ -46,7 +46,8 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

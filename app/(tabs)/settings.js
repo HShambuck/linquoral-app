@@ -1,34 +1,61 @@
 // app/(tabs)/settings.js
+
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Switch, Alert,
+  ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme, useUser } from '../../src/context/UserContext';
+import { useTheme } from '../../src/context/UserContext';
+import { useUser } from '../../src/context/UserContext';
 import { useAuth } from '../../src/context/AuthContext';
 import ToneSelector from '../../src/components/ToneSelector';
-import { APP_INFO } from '../../src/utils/constants';
+import useLinkedInAuth from '../../src/hooks/useLinkedInAuth';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
-  const { toggleTheme, preferredTone, setPreferredTone } = useUser();
+  // toggleTheme is the correct function name from UserContext (not toggleDarkMode)
+  const { toggleTheme } = useUser();
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const [showToneSelector, setShowToneSelector] = useState(false);
+  const [defaultTone, setDefaultTone] = useState('Professional');
+
+  const {
+    status: linkedInStatus,
+    isLoading: linkedInLoading,
+    error: linkedInError,
+    connect: connectLinkedIn,
+    disconnect: disconnectLinkedIn,
+    refresh: refreshLinkedIn,
+  } = useLinkedInAuth();
+
   const styles = createStyles(theme, isDarkMode, insets);
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure?', [
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out', style: 'destructive',
-        onPress: async () => { await logout(); router.replace('/(auth)/welcome'); },
+        onPress: async () => {
+          await logout();
+          router.replace('/welcome');
+        },
       },
     ]);
+  };
+
+  const handleDisconnectLinkedIn = () => {
+    Alert.alert(
+      'Disconnect LinkedIn',
+      "You won't be able to post until you reconnect.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: disconnectLinkedIn },
+      ]
+    );
   };
 
   return (
@@ -38,166 +65,314 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Settings</Text>
+        {/* Header */}
+        <Text style={styles.screenTitle}>Settings</Text>
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.profileInitials}>{user?.initials || 'U'}</Text>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            </View>
+            <View style={styles.onlineDot} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.displayName || 'User'}</Text>
-            <Text style={styles.profileMeta}>{APP_INFO.NAME} · v{APP_INFO.VERSION}</Text>
-          </View>
-          <View style={styles.profileDot} />
-        </View>
-
-        {/* Appearance */}
-        <Text style={styles.sectionLabel}>Appearance</Text>
-        <View style={styles.group}>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <View style={[styles.rowIcon, { backgroundColor: isDarkMode ? '#1C2640' : '#EEF1FA' }]}>
-                <View style={styles.halfMoonOuter}>
-                  <View style={styles.halfMoonInner} />
-                </View>
-              </View>
-              <View>
-                <Text style={styles.rowTitle}>Dark Mode</Text>
-                <Text style={styles.rowSub}>{isDarkMode ? 'On' : 'Off'}</Text>
-              </View>
-            </View>
-            <Switch
-              value={isDarkMode}
-              onValueChange={toggleTheme}
-              trackColor={{ false: theme.border, true: theme.primary }}
-              thumbColor="#fff"
-              ios_backgroundColor={theme.border}
-            />
+            <Text style={styles.profileName}>{user?.name || 'Your Name'}</Text>
+            <Text style={styles.profileEmail}>{user?.email || 'your@email.com'}</Text>
           </View>
         </View>
 
-        {/* Preferences */}
-        <Text style={styles.sectionLabel}>Preferences</Text>
-        <View style={styles.group}>
-          <TouchableOpacity
-            onPress={() => setShowToneSelector(!showToneSelector)}
-            style={styles.row}
-            activeOpacity={0.7}
-          >
-            <View style={styles.rowLeft}>
-              <View style={[styles.rowIcon, { backgroundColor: theme.accentGlow }]}>
-                <View style={styles.targetOuter}>
-                  <View style={styles.targetInner} />
-                </View>
-              </View>
-              <View>
-                <Text style={styles.rowTitle}>Default Tone</Text>
-                <Text style={styles.rowSub}>{preferredTone}</Text>
-              </View>
+        {/* LinkedIn Connection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>LINKEDIN</Text>
+          <View style={styles.linkedInCard}>
+            {/* LinkedIn "in" logo mark */}
+            <View style={styles.linkedInLogo}>
+              <Text style={styles.linkedInLogoText}>in</Text>
             </View>
-            <Text style={[styles.chevron, showToneSelector && styles.chevronUp]}>›</Text>
-          </TouchableOpacity>
-          {showToneSelector && (
-            <View style={styles.toneExpand}>
-              <ToneSelector
-                selectedTone={preferredTone}
-                onSelectTone={(tone) => { setPreferredTone(tone); setShowToneSelector(false); }}
-                layout="vertical"
-                showDescriptions
-              />
+
+            <View style={styles.linkedInInfo}>
+              {linkedInStatus.connected ? (
+                <>
+                  <View style={styles.statusRow}>
+                    <View style={[styles.statusDot, { backgroundColor: theme.accent }]} />
+                    <Text style={[styles.statusText, { color: theme.accent }]}>Connected</Text>
+                  </View>
+                  {linkedInStatus.profile && (
+                    <Text style={styles.linkedInName}>
+                      {linkedInStatus.profile.firstName} {linkedInStatus.profile.lastName}
+                    </Text>
+                  )}
+                </>
+              ) : linkedInStatus.devTokenActive ? (
+                <>
+                  <View style={styles.statusRow}>
+                    <View style={[styles.statusDot, { backgroundColor: theme.warning }]} />
+                    <Text style={[styles.statusText, { color: theme.warning }]}>Dev Token Active</Text>
+                  </View>
+                  <Text style={styles.linkedInSubtext}>Your account only · testing mode</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.linkedInDisconnected}>Not connected</Text>
+                  <Text style={styles.linkedInSubtext}>Connect to enable posting</Text>
+                </>
+              )}
+              {linkedInError ? (
+                <Text style={styles.linkedInError}>{linkedInError}</Text>
+              ) : null}
             </View>
+
+            <TouchableOpacity
+              onPress={linkedInStatus.connected ? handleDisconnectLinkedIn : connectLinkedIn}
+              style={[
+                styles.linkedInBtn,
+                linkedInStatus.connected && styles.linkedInBtnDisconnect,
+              ]}
+              activeOpacity={0.8}
+              disabled={linkedInLoading}
+            >
+              {linkedInLoading ? (
+                <ActivityIndicator
+                  color={linkedInStatus.connected ? theme.danger : '#fff'}
+                  size="small"
+                />
+              ) : (
+                <Text style={[
+                  styles.linkedInBtnText,
+                  linkedInStatus.connected && { color: theme.danger },
+                ]}>
+                  {linkedInStatus.connected ? 'Disconnect' : 'Connect'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {!linkedInStatus.connected && !linkedInLoading && (
+            <TouchableOpacity onPress={refreshLinkedIn} style={styles.refreshRow} activeOpacity={0.6}>
+              <Text style={styles.refreshText}>Refresh status</Text>
+            </TouchableOpacity>
           )}
         </View>
 
-        {/* Account */}
-        <Text style={styles.sectionLabel}>Account</Text>
-        <View style={styles.group}>
-          <TouchableOpacity onPress={handleLogout} style={styles.row} activeOpacity={0.7}>
-            <View style={styles.rowLeft}>
-              <View style={[styles.rowIcon, { backgroundColor: theme.dangerGlow }]}>
-                <View style={styles.logoutIcon} />
+        {/* Appearance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>APPEARANCE</Text>
+          <View style={styles.card}>
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <HalfMoonIcon color={theme.textSecondary} />
+                <Text style={styles.rowLabel}>Dark Mode</Text>
               </View>
-              <Text style={[styles.rowTitle, { color: theme.danger }]}>Log Out</Text>
+              {/* Toggle — calls toggleTheme (the correct function name from UserContext) */}
+              <TouchableOpacity
+                onPress={toggleTheme}
+                style={[styles.toggle, isDarkMode && styles.toggleOn]}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.toggleThumb, isDarkMode && styles.toggleThumbOn]} />
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerApp}>{APP_INFO.NAME}</Text>
-          <Text style={styles.footerTagline}>{APP_INFO.TAGLINE}</Text>
+        {/* Defaults */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>DEFAULTS</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              onPress={() => setShowToneSelector(!showToneSelector)}
+              style={styles.row}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <TargetIcon color={theme.textSecondary} />
+                <Text style={styles.rowLabel}>Default Tone</Text>
+              </View>
+              <View style={styles.rowRight}>
+                <Text style={styles.rowValue}>{defaultTone}</Text>
+                <Text style={styles.rowChevron}>›</Text>
+              </View>
+            </TouchableOpacity>
+
+            {showToneSelector && (
+              <View style={styles.toneWrap}>
+                <ToneSelector
+                  selectedTone={defaultTone}
+                  onSelectTone={(tone) => {
+                    setDefaultTone(tone);
+                    setShowToneSelector(false);
+                  }}
+                />
+              </View>
+            )}
+          </View>
         </View>
+
+        {/* Account */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ACCOUNT</Text>
+          <View style={styles.card}>
+            <TouchableOpacity onPress={handleLogout} style={styles.row} activeOpacity={0.7}>
+              <View style={styles.rowLeft}>
+                <LogoutIcon color={theme.danger} />
+                <Text style={[styles.rowLabel, { color: theme.danger }]}>Log Out</Text>
+              </View>
+              <Text style={styles.rowChevron}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Text style={styles.version}>Linqoral v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ─── Geometric Icons ──────────────────────────────────────────────────────────
+
+const HalfMoonIcon = ({ color }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{
+      width: 14, height: 14, borderRadius: 7,
+      borderWidth: 2, borderColor: color,
+      borderRightColor: 'transparent',
+      transform: [{ rotate: '45deg' }],
+    }} />
+  </View>
+);
+
+const TargetIcon = ({ color }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: color }} />
+    <View style={{ position: 'absolute', width: 6, height: 6, borderRadius: 3, borderWidth: 2, borderColor: color }} />
+  </View>
+);
+
+const LogoutIcon = ({ color }) => (
+  <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ width: 10, height: 10, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }] }} />
+    <View style={{ position: 'absolute', width: 10, height: 2, backgroundColor: color, borderRadius: 1, left: 2 }} />
+  </View>
+);
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.bg },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 22, paddingTop: 8 },
+  content: { padding: 22, gap: 8 },
 
-  title: { fontSize: 26, fontWeight: '700', color: theme.text, letterSpacing: -0.5, marginBottom: 24, marginTop: 4 },
+  screenTitle: {
+    fontSize: 28, fontWeight: '800', color: theme.text,
+    letterSpacing: -0.8, marginBottom: 20,
+  },
 
   profileCard: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 14,
     padding: 18, borderRadius: 18,
     backgroundColor: theme.surface,
     borderWidth: 1, borderColor: theme.border,
-    marginBottom: 28,
+    marginBottom: 8,
   },
-  profileAvatar: {
-    width: 48, height: 48, borderRadius: 16,
+  avatarWrap: { position: 'relative' },
+  avatar: {
+    width: 52, height: 52, borderRadius: 16,
     backgroundColor: theme.primary,
     justifyContent: 'center', alignItems: 'center',
-    marginRight: 14,
   },
-  profileInitials: { color: '#fff', fontWeight: '700', fontSize: 17, letterSpacing: 0.5 },
+  avatarText: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  onlineDot: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: theme.accent,
+    borderWidth: 2, borderColor: theme.surface,
+  },
   profileInfo: { flex: 1 },
-  profileName: { fontSize: 16, fontWeight: '600', color: theme.text, letterSpacing: -0.2 },
-  profileMeta: { fontSize: 12, color: theme.textMuted, marginTop: 3 },
-  profileDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent, shadowColor: theme.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 4 },
+  profileName: { fontSize: 16, fontWeight: '700', color: theme.text, marginBottom: 2 },
+  profileEmail: { fontSize: 13, color: theme.textMuted },
 
-  sectionLabel: { fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.textMuted, fontWeight: '600', marginBottom: 10, marginLeft: 2 },
-
-  group: {
-    backgroundColor: theme.surface,
-    borderRadius: 16,
-    borderWidth: 1, borderColor: theme.border,
-    marginBottom: 24,
-    overflow: 'hidden',
+  section: { gap: 6, marginBottom: 4 },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700', color: theme.textMuted,
+    letterSpacing: 1.5, paddingHorizontal: 4, marginBottom: 2,
   },
+
+  card: {
+    borderRadius: 16, backgroundColor: theme.surface,
+    borderWidth: 1, borderColor: theme.border, overflow: 'hidden',
+  },
+
   row: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 16,
   },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  rowIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    justifyContent: 'center', alignItems: 'center',
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowLabel: { fontSize: 14, color: theme.text, fontWeight: '500' },
+  rowValue: { fontSize: 13, color: theme.textMuted },
+  rowChevron: { fontSize: 20, color: theme.textMuted },
+  toneWrap: {
+    paddingHorizontal: 12, paddingBottom: 12,
+    borderTopWidth: 1, borderTopColor: theme.border,
   },
 
-  // Dark mode icon
-  halfMoonOuter: { width: 16, height: 16, borderRadius: 8, backgroundColor: isDarkMode ? theme.textSecondary : theme.textMuted, overflow: 'hidden' },
-  halfMoonInner: { position: 'absolute', right: -4, top: -1, width: 14, height: 14, borderRadius: 7, backgroundColor: isDarkMode ? '#1C2640' : '#EEF1FA' },
+  // LinkedIn
+  linkedInCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 16, borderRadius: 16,
+    backgroundColor: theme.surface,
+    borderWidth: 1, borderColor: theme.border,
+  },
+  linkedInLogo: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: '#0A66C2',
+    justifyContent: 'center', alignItems: 'center',
+    flexShrink: 0,
+  },
+  linkedInLogoText: { fontSize: 16, fontWeight: '800', color: '#fff', fontStyle: 'italic' },
+  linkedInInfo: { flex: 1, gap: 2 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusDot: { width: 7, height: 7, borderRadius: 3.5 },
+  statusText: { fontSize: 13, fontWeight: '600' },
+  linkedInName: { fontSize: 12, color: theme.textSecondary },
+  linkedInDisconnected: { fontSize: 13, fontWeight: '600', color: theme.text },
+  linkedInSubtext: { fontSize: 11, color: theme.textMuted },
+  linkedInError: { fontSize: 11, color: theme.danger, marginTop: 2 },
+  linkedInBtn: {
+    paddingVertical: 8, paddingHorizontal: 14,
+    borderRadius: 20, backgroundColor: '#0A66C2',
+    minWidth: 80, alignItems: 'center', flexShrink: 0,
+  },
+  linkedInBtnDisconnect: {
+    backgroundColor: 'transparent',
+    borderWidth: 1, borderColor: theme.danger,
+  },
+  linkedInBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  refreshRow: { alignItems: 'center', paddingVertical: 6 },
+  refreshText: { fontSize: 12, color: theme.textMuted },
 
-  // Target icon
-  targetOuter: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: theme.accent, justifyContent: 'center', alignItems: 'center' },
-  targetInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent },
+  // Toggle
+  toggle: {
+    width: 46, height: 27, borderRadius: 14,
+    backgroundColor: theme.border,
+    justifyContent: 'center', padding: 3,
+  },
+  toggleOn: { backgroundColor: theme.primary },
+  toggleThumb: {
+    width: 21, height: 21, borderRadius: 10.5,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2, shadowRadius: 2, elevation: 2,
+  },
+  toggleThumbOn: { transform: [{ translateX: 19 }] },
 
-  // Logout icon
-  logoutIcon: { width: 16, height: 14, borderTopRightRadius: 4, borderBottomRightRadius: 4, borderWidth: 2, borderLeftWidth: 0, borderColor: theme.danger },
-
-  rowTitle: { fontSize: 14, fontWeight: '500', color: theme.text },
-  rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
-  chevron: { fontSize: 22, color: theme.textMuted, transform: [{ rotate: '0deg' }] },
-  chevronUp: { transform: [{ rotate: '90deg' }] },
-
-  toneExpand: { padding: 16, paddingTop: 4, borderTopWidth: 1, borderTopColor: theme.border },
-
-  footer: { alignItems: 'center', paddingTop: 8 },
-  footerApp: { fontSize: 14, fontWeight: '700', color: theme.textMuted, letterSpacing: 1 },
-  footerTagline: { fontSize: 11, color: theme.textMuted, marginTop: 4, fontStyle: 'italic' },
+  version: {
+    fontSize: 12, color: theme.textMuted,
+    textAlign: 'center', marginTop: 16,
+  },
 });

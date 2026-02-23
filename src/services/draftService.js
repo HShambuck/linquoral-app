@@ -1,89 +1,63 @@
 // src/services/draftService.js
+//
+// This is the complete fixed file.
+// Key fix: getRecentDraft() and all createDraft() calls now safely handle
+// mediaAttachments with `|| []` so they never throw when the field is missing.
 
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../utils/constants';
-import { createDraft, getDisplayText, generateTitleFromContent } from '../models/Draft';
+import { createDraft, generateTitleFromContent } from '../models/Draft';
 
 /**
- * Draft management service
- * Handles CRUD operations for voice post drafts
+ * Safe mapper — converts a raw API draft object to a frontend Draft model.
+ * Centralising this prevents the "Cannot read property 'mediaAttachments' of undefined"
+ * error that occurs when the API returns a shape we don't expect.
  */
+const mapDraft = (draft) => {
+  if (!draft) return null;
+  return createDraft({
+    id: draft._id || draft.id,
+    userId: draft.userId,
+    rawTranscript: draft.rawTranscript,
+    aiRefinedText: draft.aiRefinedText,
+    userEditedText: draft.userEditedText,
+    title: draft.title,
+    tone: draft.tone,
+    status: draft.status,
+    scheduledAt: draft.scheduledAt ? new Date(draft.scheduledAt) : null,
+    publishedAt: draft.publishedAt ? new Date(draft.publishedAt) : null,
+    audioUri: draft.audioUri,
+    audioDurationMs: draft.audioDurationMs,
+    mediaAttachments: draft.mediaAttachments || [],   // safe fallback
+  });
+};
+
 const draftService = {
   /**
-   * Fetch all drafts for current user
-   * @param {Object} options
-   * @param {string} options.status - Filter by status ('draft', 'scheduled', 'published')
-   * @param {number} options.limit - Max number of drafts
-   * @param {number} options.offset - Pagination offset
-   * @returns {Promise<Array>} List of drafts
+   * Fetch all drafts
    */
   getDrafts: async ({ status = null, limit = 50, offset = 0 } = {}) => {
     const params = { limit, offset };
-    if (status) {
-      params.status = status;
-    }
+    if (status) params.status = status;
 
     const response = await api.get('/drafts', { params });
+    const drafts = (response.drafts || []).map(mapDraft).filter(Boolean);
 
-    const drafts = response.drafts.map((draft) =>
-      createDraft({
-        id: draft._id || draft.id,
-        userId: draft.userId,
-        rawTranscript: draft.rawTranscript,
-        aiRefinedText: draft.aiRefinedText,
-        userEditedText: draft.userEditedText,
-        title: draft.title,
-        tone: draft.tone,
-        status: draft.status,
-        scheduledAt: draft.scheduledAt ? new Date(draft.scheduledAt) : null,
-        publishedAt: draft.publishedAt ? new Date(draft.publishedAt) : null,
-        audioUri: draft.audioUri,
-        audioDurationMs: draft.audioDurationMs,
-        mediaAttachments: draft.mediaAttachments || [],
-      })
-    );
-
-    // Cache drafts locally
     await draftService.cacheDrafts(drafts);
-
     return drafts;
   },
 
   /**
    * Get a single draft by ID
-   * @param {string} draftId
-   * @returns {Promise<Object>} Draft object
    */
   getDraft: async (draftId) => {
     const response = await api.get(`/drafts/${draftId}`);
-
-    return createDraft({
-      id: response.draft._id || response.draft.id,
-      userId: response.draft.userId,
-      rawTranscript: response.draft.rawTranscript,
-      aiRefinedText: response.draft.aiRefinedText,
-      userEditedText: response.draft.userEditedText,
-      title: response.draft.title,
-      tone: response.draft.tone,
-      status: response.draft.status,
-      scheduledAt: response.draft.scheduledAt ? new Date(response.draft.scheduledAt) : null,
-      publishedAt: response.draft.publishedAt ? new Date(response.draft.publishedAt) : null,
-      audioUri: response.draft.audioUri,
-      audioDurationMs: response.draft.audioDurationMs,
-      mediaAttachments: response.draft.mediaAttachments || [],
-    });
+    return mapDraft(response.draft);
   },
 
   /**
-   * Create a new draft from voice transcript
-   * @param {Object} params
-   * @param {string} params.rawTranscript - Original transcription
-   * @param {string} params.aiRefinedText - AI-refined content
-   * @param {string} params.tone - Selected tone
-   * @param {string} params.audioUri - Path to audio file (optional)
-   * @param {number} params.audioDurationMs - Audio duration (optional)
-   * @returns {Promise<Object>} Created draft
+   * Create a new draft
    */
   createDraft: async ({
     rawTranscript,
@@ -91,177 +65,99 @@ const draftService = {
     tone = 'Professional',
     audioUri = null,
     audioDurationMs = 0,
-    mediaAttachments = []
+    mediaAttachments = [],
   }) => {
-    // Generate title from content
     const title = generateTitleFromContent(aiRefinedText || rawTranscript);
 
     const response = await api.post('/drafts', {
       rawTranscript,
       aiRefinedText,
-      userEditedText: aiRefinedText, // Initially same as AI text
+      userEditedText: aiRefinedText,
       title,
       tone,
       status: 'draft',
       audioUri,
       audioDurationMs,
-      mediaAttachments
+      mediaAttachments,
     });
 
-    return createDraft({
-      id: response.draft._id || response.draft.id,
-      userId: response.draft.userId,
-      rawTranscript: response.draft.rawTranscript,
-      aiRefinedText: response.draft.aiRefinedText,
-      userEditedText: response.draft.userEditedText,
-      title: response.draft.title,
-      tone: response.draft.tone,
-      status: response.draft.status,
-      scheduledAt: null,
-      publishedAt: null,
-      audioUri: response.draft.audioUri,
-      audioDurationMs: response.draft.audioDurationMs,
-      mediaAttachments: response.draft.mediaAttachments || [],
-    });
+    return mapDraft(response.draft);
   },
 
   /**
    * Update an existing draft
-   * @param {string} draftId
-   * @param {Object} updates
-   * @returns {Promise<Object>} Updated draft
    */
   updateDraft: async (draftId, updates) => {
     const response = await api.patch(`/drafts/${draftId}`, {
       ...updates,
       updatedAt: new Date().toISOString(),
     });
-
-    return createDraft({
-      id: response.draft._id || response.draft.id,
-      userId: response.draft.userId,
-      rawTranscript: response.draft.rawTranscript,
-      aiRefinedText: response.draft.aiRefinedText,
-      userEditedText: response.draft.userEditedText,
-      title: response.draft.title,
-      tone: response.draft.tone,
-      status: response.draft.status,
-      scheduledAt: response.draft.scheduledAt ? new Date(response.draft.scheduledAt) : null,
-      publishedAt: response.draft.publishedAt ? new Date(response.draft.publishedAt) : null,
-      audioUri: response.draft.audioUri,
-      audioDurationMs: response.draft.audioDurationMs,
-      mediaAttachments: response.draft.mediaAttachments || [],
-    });
+    return mapDraft(response.draft);
   },
 
   /**
    * Delete a draft
-   * @param {string} draftId
-   * @returns {Promise<void>}
    */
   deleteDraft: async (draftId) => {
     await api.delete(`/drafts/${draftId}`);
   },
 
   /**
-   * Schedule a draft for future posting
-   * @param {string} draftId
-   * @param {Date} scheduledAt
-   * @returns {Promise<Object>} Updated draft
+   * Schedule a draft
    */
   scheduleDraft: async (draftId, scheduledAt) => {
     const response = await api.post(`/drafts/${draftId}/schedule`, {
       scheduledAt: scheduledAt.toISOString(),
     });
-
-    return createDraft({
-      id: response.draft._id || response.draft.id,
-      userId: response.draft.userId,
-      rawTranscript: response.draft.rawTranscript,
-      aiRefinedText: response.draft.aiRefinedText,
-      userEditedText: response.draft.userEditedText,
-      title: response.draft.title,
-      tone: response.draft.tone,
-      status: 'scheduled',
-      scheduledAt: new Date(response.draft.scheduledAt),
-      publishedAt: null,
-      audioUri: response.draft.audioUri,
-      audioDurationMs: response.draft.audioDurationMs,
-    });
+    return mapDraft(response.draft);
   },
 
   /**
-   * Cancel a scheduled draft (revert to draft status)
-   * @param {string} draftId
-   * @returns {Promise<Object>} Updated draft
+   * Unschedule a draft
    */
   unscheduleDraft: async (draftId) => {
     const response = await api.post(`/drafts/${draftId}/unschedule`);
-
-    return createDraft({
-      id: response.draft._id || response.draft.id,
-      userId: response.draft.userId,
-      rawTranscript: response.draft.rawTranscript,
-      aiRefinedText: response.draft.aiRefinedText,
-      userEditedText: response.draft.userEditedText,
-      title: response.draft.title,
-      tone: response.draft.tone,
-      status: 'draft',
-      scheduledAt: null,
-      publishedAt: null,
-      audioUri: response.draft.audioUri,
-      audioDurationMs: response.draft.audioDurationMs,
-    });
+    return mapDraft(response.draft);
   },
 
   /**
-   * Cache drafts locally for offline access
-   * @param {Array} drafts
+   * Cache drafts locally
    */
   cacheDrafts: async (drafts) => {
     try {
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.DRAFTS_CACHE,
-        JSON.stringify(drafts)
-      );
+      await AsyncStorage.setItem(STORAGE_KEYS.DRAFTS_CACHE, JSON.stringify(drafts));
     } catch (error) {
       console.warn('Error caching drafts:', error);
     }
   },
 
   /**
-   * Get cached drafts (for offline access)
-   * @returns {Promise<Array>}
+   * Get cached drafts (offline fallback)
    */
   getCachedDrafts: async () => {
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEYS.DRAFTS_CACHE);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-      return [];
-    } catch (error) {
-      console.warn('Error reading cached drafts:', error);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
       return [];
     }
   },
 
   /**
-   * Get draft statistics for current user
-   * @returns {Promise<Object>} { totalDrafts, scheduledPosts, publishedPosts }
+   * Get draft statistics
    */
   getStats: async () => {
     const response = await api.get('/drafts/stats');
     return {
-      totalDrafts: response.stats.totalDrafts || 0,
-      scheduledPosts: response.stats.scheduledPosts || 0,
-      publishedPosts: response.stats.publishedPosts || 0,
+      totalDrafts: response.stats?.totalDrafts || 0,
+      scheduledPosts: response.stats?.scheduledPosts || 0,
+      publishedPosts: response.stats?.publishedPosts || 0,
     };
   },
 
   /**
-   * Get the most recent draft (for "Continue last draft" feature)
-   * @returns {Promise<Object|null>}
+   * Get the most recent draft.
+   * Uses mapDraft() so missing fields like mediaAttachments never throw.
    */
   getRecentDraft: async () => {
     try {
@@ -269,25 +165,10 @@ const draftService = {
         params: { limit: 1, status: 'draft' },
       });
 
-      if (response.drafts && response.drafts.length > 0) {
-        const draft = response.drafts[0];
-        return createDraft({
-          id: draft._id || draft.id,
-          userId: draft.userId,
-          rawTranscript: draft.rawTranscript,
-          aiRefinedText: draft.aiRefinedText,
-          userEditedText: draft.userEditedText,
-          title: draft.title,
-          tone: draft.tone,
-          status: draft.status,
-          scheduledAt: draft.scheduledAt ? new Date(draft.scheduledAt) : null,
-          publishedAt: draft.publishedAt ? new Date(draft.publishedAt) : null,
-          audioUri: draft.audioUri,
-          audioDurationMs: draft.audioDurationMs,
-          mediaAttachments: response.draft.mediaAttachments || [],
-        });
-      }
-      return null;
+      const drafts = response.drafts || [];
+      if (drafts.length === 0) return null;
+
+      return mapDraft(drafts[0]);
     } catch (error) {
       console.warn('Error fetching recent draft:', error);
       return null;

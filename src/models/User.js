@@ -22,6 +22,7 @@ export const createDefaultUser = () => ({
   initials: '',
   preferredTone: 'Professional',
   isDarkMode: true,
+  linkedInConnected: false,
   stats: {
     totalDrafts: 0,
     scheduledPosts: 0,
@@ -41,6 +42,7 @@ export const createUser = ({
   displayName = '',
   preferredTone = 'Professional',
   isDarkMode = true,
+  linkedInConnected = false,
   stats = null,
 }) => ({
   id,
@@ -48,6 +50,7 @@ export const createUser = ({
   initials: generateInitials(displayName),
   preferredTone,
   isDarkMode,
+  linkedInConnected,
   stats: stats || {
     totalDrafts: 0,
     scheduledPosts: 0,

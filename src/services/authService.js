@@ -35,6 +35,7 @@ const authService = {
         displayName: user.displayName,
         preferredTone: user.preferredTone,
         isDarkMode: true,
+        linkedInConnected: user.linkedInConnected || false,
         stats: user.stats,
       }),
       token,
@@ -63,6 +64,7 @@ const authService = {
         displayName: user.displayName || 'User',
         preferredTone: user.preferredTone || 'Professional',
         isDarkMode: true,
+        linkedInConnected: user.linkedInConnected || false,
         stats: user.stats,
       }),
       token,
@@ -94,6 +96,7 @@ const authService = {
         displayName: user.displayName,
         preferredTone: user.preferredTone,
         isDarkMode: user.isDarkMode ?? true,
+        linkedInConnected: user.linkedInConnected || false,
         stats: user.stats,
       });
     } catch (error) {
@@ -121,6 +124,7 @@ const authService = {
       displayName: user.displayName,
       preferredTone: user.preferredTone,
       isDarkMode: user.isDarkMode,
+      linkedInConnected: user.linkedInConnected || false,
       stats: user.stats,
     });
   },

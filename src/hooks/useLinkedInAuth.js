@@ -4,20 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import publishService from '../services/publishService';
+import authService from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 
-/**
- * useLinkedInAuth
- *
- * Manages the full LinkedIn OAuth flow:
- * 1. Fetches auth URL from backend
- * 2. Opens LinkedIn consent screen in an in-app browser
- * 3. Listens for the deep link redirect (linquoral://linkedin-connected)
- * 4. Parses success/error from the URL params
- * 5. Refreshes connection status
- *
- * Usage:
- *   const { status, connect, disconnect, refresh, isLoading, error } = useLinkedInAuth();
- */
 const useLinkedInAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -28,8 +17,12 @@ const useLinkedInAuth = () => {
     profile: null,
   });
 
+  // Access auth context so we can refresh the user after LinkedIn connects
+  const { updateProfile } = useAuth();
+
   /**
-   * Refresh LinkedIn connection status from backend
+   * Refresh LinkedIn connection status from backend.
+   * Also re-fetches the full user so AuthContext stays in sync.
    */
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -37,12 +30,18 @@ const useLinkedInAuth = () => {
       const result = await publishService.getLinkedInStatus();
       setStatus(result);
       setError(null);
+
+      // Keep AuthContext user in sync so publishing works immediately
+      const freshUser = await authService.getMe();
+      if (freshUser) {
+        updateProfile({ linkedInConnected: freshUser.linkedInConnected });
+      }
     } catch (err) {
       setError('Failed to load LinkedIn status');
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [updateProfile]);
 
   // Load status on mount
   useEffect(() => {
@@ -50,18 +49,16 @@ const useLinkedInAuth = () => {
   }, []);
 
   /**
-   * Handle the deep link that LinkedIn redirects to after OAuth.
-   * URL format: linquoral://linkedin-connected?success=true&firstName=X&lastName=Y
-   *          or linquoral://linkedin-connected?success=false&error=MESSAGE
+   * Handle the deep link after LinkedIn OAuth callback.
+   * linqoral://linkedin-connected?success=true&firstName=X&lastName=Y
+   * linqoral://linkedin-connected?success=false&error=MESSAGE
    */
   const handleDeepLink = useCallback(async (event) => {
     const url = event.url || event;
     if (!url || !url.includes('linkedin-connected')) return;
 
-    // Close the in-app browser (if still open)
-    await WebBrowser.dismissBrowser();
+    await WebBrowser.dismissBrowser().catch(() => {});
 
-    // Parse query params
     const queryString = url.split('?')[1] || '';
     const params = {};
     queryString.split('&').forEach((pair) => {
@@ -70,13 +67,11 @@ const useLinkedInAuth = () => {
     });
 
     if (params.success === 'true') {
-      // Refresh status from backend to get full profile
       await refresh();
       setError(null);
     } else {
       const errorMsg = params.error || 'LinkedIn connection failed';
       setError(friendlyError(errorMsg));
-      setIsLoading(false);
     }
 
     setIsLoading(false);
@@ -86,7 +81,6 @@ const useLinkedInAuth = () => {
   useEffect(() => {
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
-    // Handle case where app was opened from a cold start via deep link
     Linking.getInitialURL().then((url) => {
       if (url && url.includes('linkedin-connected')) {
         handleDeepLink({ url });
@@ -97,7 +91,7 @@ const useLinkedInAuth = () => {
   }, [handleDeepLink]);
 
   /**
-   * Start the LinkedIn OAuth flow
+   * Start LinkedIn OAuth flow
    */
   const connect = useCallback(async () => {
     setIsLoading(true);
@@ -105,17 +99,13 @@ const useLinkedInAuth = () => {
 
     try {
       const authUrl = await publishService.getLinkedInAuthUrl();
-
-      // Open LinkedIn consent screen in an in-app browser
-      // The browser will be dismissed automatically when the deep link fires
       await WebBrowser.openBrowserAsync(authUrl, {
         showTitle: false,
-        toolbarColor: '#0A66C2', // LinkedIn blue
+        toolbarColor: '#0A66C2',
         secondaryToolbarColor: '#ffffff',
         enableBarCollapsing: true,
       });
-
-      // If we reach here without the deep link firing (user closed browser manually)
+      // Browser closed by user without completing — reset loading
       setIsLoading(false);
     } catch (err) {
       setError('Failed to open LinkedIn login. Please try again.');
@@ -132,12 +122,14 @@ const useLinkedInAuth = () => {
     try {
       await publishService.disconnectLinkedIn();
       setStatus({ connected: false, devTokenActive: false, profile: null });
+      // Sync AuthContext so publish screens know LinkedIn is gone
+      updateProfile({ linkedInConnected: false });
     } catch (err) {
       setError('Failed to disconnect LinkedIn. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [updateProfile]);
 
   return {
     status,
@@ -150,9 +142,6 @@ const useLinkedInAuth = () => {
   };
 };
 
-/**
- * Convert raw LinkedIn/backend error codes into user-friendly messages
- */
 const friendlyError = (error) => {
   const map = {
     access_denied: 'You declined LinkedIn access. Tap Connect to try again.',

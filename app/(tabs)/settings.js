@@ -16,7 +16,6 @@ import useLinkedInAuth from '../../src/hooks/useLinkedInAuth';
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
-  // toggleTheme is the correct function name from UserContext (not toggleDarkMode)
   const { toggleTheme } = useUser();
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
@@ -33,6 +32,13 @@ export default function SettingsScreen() {
   } = useLinkedInAuth();
 
   const styles = createStyles(theme, isDarkMode, insets);
+
+  // Resolve display name and subtitle for profile card
+  const displayName = user?.displayName || user?.name || 'Your Name';
+  const profileInitial = displayName.charAt(0).toUpperCase();
+  const profileSubtitle = linkedInStatus?.connected && linkedInStatus?.profile
+    ? `${linkedInStatus.profile.firstName} ${linkedInStatus.profile.lastName} · LinkedIn`
+    : user?.email || 'Not connected to LinkedIn';
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -72,15 +78,13 @@ export default function SettingsScreen() {
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-              </Text>
+              <Text style={styles.avatarText}>{profileInitial}</Text>
             </View>
             <View style={styles.onlineDot} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name || 'Your Name'}</Text>
-            <Text style={styles.profileEmail}>{user?.email || 'your@email.com'}</Text>
+            <Text style={styles.profileName}>{displayName}</Text>
+            <Text style={styles.profileEmail}>{profileSubtitle}</Text>
           </View>
         </View>
 
@@ -88,7 +92,6 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>LINKEDIN</Text>
           <View style={styles.linkedInCard}>
-            {/* LinkedIn "in" logo mark */}
             <View style={styles.linkedInLogo}>
               <Text style={styles.linkedInLogoText}>in</Text>
             </View>
@@ -166,7 +169,6 @@ export default function SettingsScreen() {
                 <HalfMoonIcon color={theme.textSecondary} />
                 <Text style={styles.rowLabel}>Dark Mode</Text>
               </View>
-              {/* Toggle — calls toggleTheme (the correct function name from UserContext) */}
               <TouchableOpacity
                 onPress={toggleTheme}
                 style={[styles.toggle, isDarkMode && styles.toggleOn]}
@@ -320,7 +322,6 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
     borderTopWidth: 1, borderTopColor: theme.border,
   },
 
-  // LinkedIn
   linkedInCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 16, borderRadius: 16,
@@ -355,7 +356,6 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   refreshRow: { alignItems: 'center', paddingVertical: 6 },
   refreshText: { fontSize: 12, color: theme.textMuted },
 
-  // Toggle
   toggle: {
     width: 46, height: 27, borderRadius: 14,
     backgroundColor: theme.border,

@@ -13,16 +13,8 @@ export default function LinkedInConnectedScreen() {
     WebBrowser.dismissBrowser().catch(() => {});
 
     const timer = setTimeout(() => {
-      try {
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/(tabs)');
-        }
-      } catch (e) {
-        console.warn('Navigation after LinkedIn callback failed:', e);
-      }
-    }, 500);
+      router.replace('/(tabs)');
+    }, 800);
 
     return () => clearTimeout(timer);
   }, []);

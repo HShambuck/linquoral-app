@@ -11,7 +11,7 @@ import publishService from '../services/publishService';
  * Manages the full LinkedIn OAuth flow:
  * 1. Fetches auth URL from backend
  * 2. Opens LinkedIn consent screen in an in-app browser
- * 3. Listens for the deep link redirect (linquoral://linkedin-connected)
+ * 3. Listens for the deep link redirect (linqoral://linkedin-connected)
  * 4. Parses success/error from the URL params
  * 5. Refreshes connection status
  *
@@ -51,8 +51,8 @@ const useLinkedInAuth = () => {
 
   /**
    * Handle the deep link that LinkedIn redirects to after OAuth.
-   * URL format: linquoral://linkedin-connected?success=true&firstName=X&lastName=Y
-   *          or linquoral://linkedin-connected?success=false&error=MESSAGE
+   * URL format: linqoral://linkedin-connected?success=true&firstName=X&lastName=Y
+   *          or linqoral://linkedin-connected?success=false&error=MESSAGE
    */
   const handleDeepLink = useCallback(async (event) => {
     const url = event.url || event;

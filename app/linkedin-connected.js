@@ -1,6 +1,6 @@
 // app/linkedin-connected.js
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -8,15 +8,21 @@ import * as WebBrowser from 'expo-web-browser';
 export default function LinkedInConnectedScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+  const isMounted = useRef(true);
 
   useEffect(() => {
     WebBrowser.dismissBrowser().catch(() => {});
 
     const timer = setTimeout(() => {
-      router.replace('/(tabs)');
-    }, 800);
+      if (isMounted.current) {
+        router.replace('/(tabs)');
+      }
+    }, 1500);
 
-    return () => clearTimeout(timer);
+    return () => {
+      isMounted.current = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (

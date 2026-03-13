@@ -1,93 +1,85 @@
 // src/hooks/useLinkedInAuth.js
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../context/AuthContext';
-import publishService from '../services/publishService';
+import authService from '../services/authService';
+import api from '../services/api';
 
-const useLinkedInAuth = () => {
-  const { refreshUser } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+export const useLinkedInAuth = () => {
+  const { refresh, refreshUser, dispatch } = useAuth();
+  const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
-  const [status, setStatus] = useState({
-    connected: false,
-    devTokenActive: false,
-    profile: null,
-  });
 
-  const refresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const result = await publishService.getLinkedInStatus();
-      setStatus(result);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load LinkedIn status');
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  const connect = useCallback(async () => {
-    setIsLoading(true);
+  const connectLinkedIn = useCallback(async () => {
+    setIsConnecting(true);
     setError(null);
+
     try {
-      const authUrl = await publishService.getLinkedInAuthUrl();
+      // Get the auth URL from backend
+      const { data } = await api.get('/publish/linkedin/auth-url');
+      const authUrl = data.authUrl;
 
-      await WebBrowser.openBrowserAsync(authUrl, {
-        showTitle: false,
-        toolbarColor: '#0A66C2',
-        secondaryToolbarColor: '#ffffff',
-        enableBarCollapsing: true,
-      });
+      // Open browser — blocks until user completes or dismisses
+      const result = await WebBrowser.openAuthSessionAsync(
+        authUrl,
+        'linqoral://linkedin-connected'
+      );
 
-      // Browser closed — refresh both LinkedIn status AND full user in AuthContext
-      await Promise.all([refresh(), refreshUser()]);
+      if (result.type === 'success' && result.url) {
+        const url = new URL(result.url);
+        const success = url.searchParams.get('success') === 'true';
+        const recovered = url.searchParams.get('recovered') === 'true';
+        const recoveryToken = url.searchParams.get('token');
+
+        if (success && recovered && recoveryToken) {
+          // Account recovery — swap to the recovered account's token
+          await authService.storeToken(recoveryToken);
+          const session = await authService.restoreSession();
+
+          if (session?.user) {
+            dispatch({ type: 'UPDATE_USER', payload: { user: session.user } });
+          }
+
+          return { success: true, recovered: true };
+        }
+
+        if (success) {
+          // Normal LinkedIn connect — just refresh user data
+          await refreshUser();
+          return { success: true, recovered: false };
+        }
+
+        const errorMsg = url.searchParams.get('error') || 'LinkedIn connection failed';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+
+      // User cancelled
+      return { success: false, cancelled: true };
     } catch (err) {
-      setError('Failed to open LinkedIn login. Please try again.');
+      const message = err.message || 'Failed to connect LinkedIn';
+      setError(message);
+      return { success: false, error: message };
     } finally {
-      setIsLoading(false);
+      setIsConnecting(false);
     }
-  }, [refresh, refreshUser]);
+  }, [refresh, refreshUser, dispatch]);
 
   const disconnect = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
     try {
-      await publishService.disconnectLinkedIn();
-      setStatus({ connected: false, devTokenActive: false, profile: null });
+      await api.post('/publish/linkedin/disconnect');
       await refreshUser();
+      return { success: true };
     } catch (err) {
-      setError('Failed to disconnect LinkedIn. Please try again.');
-    } finally {
-      setIsLoading(false);
+      return { success: false, error: err.message };
     }
   }, [refreshUser]);
 
   return {
-    status,
-    isLoading,
-    isRefreshing,
-    error,
-    connect,
+    connectLinkedIn,
     disconnect,
-    refresh,
+    isConnecting,
+    error,
+    clearError: () => setError(null),
   };
 };
-
-const friendlyError = (error) => {
-  const map = {
-    access_denied: 'You declined LinkedIn access. Tap Connect to try again.',
-    missing_params: 'Something went wrong with the LinkedIn redirect. Please try again.',
-    invalid_state: 'Security check failed. Please try again.',
-    user_not_found: 'Account not found. Please log out and back in.',
-  };
-  return map[error] || 'LinkedIn connection failed. Please try again.';
-};
-
-export default useLinkedInAuth;

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/UserContext';
+import { useLinkedInAuth } from '../../src/hooks/useLinkedInAuth';
 
 const FEATURES = [
   { title: 'Voice-First', desc: 'Speak naturally, AI handles the rest' },
@@ -16,7 +17,14 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
+  const { connectLinkedIn, isConnecting } = useLinkedInAuth();
   const styles = createStyles(theme, isDarkMode, insets);
+
+  const handleRestoreAccount = async () => {
+    // Triggers LinkedIn OAuth — if the profile matches an existing user,
+    // the backend issues a recovery token and the app restores that account.
+    await connectLinkedIn();
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -58,6 +66,22 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.primaryBtnText}>Get Started</Text>
           </TouchableOpacity>
+
+          {/* Restore Account */}
+          <TouchableOpacity
+            onPress={handleRestoreAccount}
+            style={styles.restoreBtn}
+            activeOpacity={0.8}
+            disabled={isConnecting}
+          >
+            <View style={styles.restoreLinkedInBadge}>
+              <Text style={styles.restoreLinkedInText}>in</Text>
+            </View>
+            <Text style={styles.restoreBtnText}>
+              {isConnecting ? 'Connecting...' : 'Restore Previous Account'}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)')}
             style={styles.secondaryBtn}
@@ -75,8 +99,7 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.bg },
   container: {
     flex: 1, paddingHorizontal: 28,
-    paddingTop: 24,
-    justifyContent: 'space-between',
+    paddingTop: 24, justifyContent: 'space-between',
   },
 
   brandSection: { alignItems: 'center', paddingTop: 24 },
@@ -91,10 +114,7 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
     shadowRadius: 24, elevation: 12,
   },
   logoInner: { alignItems: 'center' },
-  logoMicBody: {
-    width: 18, height: 26, borderRadius: 9,
-    borderWidth: 3, borderColor: '#fff',
-  },
+  logoMicBody: { width: 18, height: 26, borderRadius: 9, borderWidth: 3, borderColor: '#fff' },
   logoMicNeck: {
     marginTop: 5, width: 24, height: 12,
     borderTopLeftRadius: 12, borderTopRightRadius: 12,
@@ -108,39 +128,50 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   features: { gap: 16, paddingVertical: 8 },
   featureRow: {
     flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: theme.surface,
-    borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: theme.border,
-    gap: 14,
+    backgroundColor: theme.surface, borderRadius: 16,
+    padding: 16, borderWidth: 1, borderColor: theme.border, gap: 14,
   },
   featureIndex: {
     width: 28, height: 28, borderRadius: 8,
     backgroundColor: theme.primaryGlow,
     borderWidth: 1, borderColor: `${theme.primary}30`,
-    justifyContent: 'center', alignItems: 'center',
-    marginTop: 1,
+    justifyContent: 'center', alignItems: 'center', marginTop: 1,
   },
   featureIndexText: { fontSize: 12, fontWeight: '700', color: theme.primary },
   featureText: { flex: 1 },
   featureTitle: { fontSize: 15, fontWeight: '600', color: theme.text, marginBottom: 3, letterSpacing: -0.2 },
   featureDesc: { fontSize: 13, color: theme.textMuted, lineHeight: 18 },
 
-  ctaSection: { gap: 12 },
+  ctaSection: { gap: 10 },
   primaryBtn: {
     padding: 18, borderRadius: 16,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
+    backgroundColor: theme.primary, alignItems: 'center',
     shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: isDarkMode ? 0.4 : 0.2,
     shadowRadius: 16, elevation: 8,
   },
   primaryBtnText: { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: -0.2 },
+
+  restoreBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 10,
+    padding: 16, borderRadius: 16,
+    backgroundColor: theme.surface,
+    borderWidth: 1.5, borderColor: '#0A66C2',
+  },
+  restoreLinkedInBadge: {
+    width: 22, height: 22, borderRadius: 5,
+    backgroundColor: '#0A66C2',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  restoreLinkedInText: { color: '#fff', fontSize: 11, fontWeight: '800', fontStyle: 'italic' },
+  restoreBtnText: { fontSize: 14, fontWeight: '600', color: '#0A66C2' },
+
   secondaryBtn: {
     padding: 16, borderRadius: 16,
     backgroundColor: theme.surface,
-    borderWidth: 1, borderColor: theme.border,
-    alignItems: 'center',
+    borderWidth: 1, borderColor: theme.border, alignItems: 'center',
   },
   secondaryBtnText: { fontSize: 14, fontWeight: '500', color: theme.textMuted },
 });

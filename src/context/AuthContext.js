@@ -175,6 +175,7 @@ export const AuthProvider = ({ children }) => {
     completeOnboarding,
     clearError,
     refreshUser,
+    dispatch,
   };
 
   return (

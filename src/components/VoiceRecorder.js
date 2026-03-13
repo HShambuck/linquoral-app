@@ -26,10 +26,10 @@ const PHASES = {
   ERROR: "error",
 };
 
-// ── CHANGE 1: wrapped with forwardRef and added ref parameter ──
 const VoiceRecorder = forwardRef(
   (
     {
+      onRecordingStart, // ← NEW: called when recording begins
       onRecordingComplete,
       onProcessingStart,
       onError,
@@ -58,7 +58,6 @@ const VoiceRecorder = forwardRef(
       new Animated.Value(0.3),
     ]).current;
 
-    // ── CHANGE 2: added useImperativeHandle so parent can call setDone/setError/reset ──
     useImperativeHandle(ref, () => ({
       setDone: () => setPhase(PHASES.DONE),
       setError: (msg) => {
@@ -79,7 +78,6 @@ const VoiceRecorder = forwardRef(
         playsInSilentModeIOS: true,
       });
       return () => {
-        // cleanup on unmount
         if (durationIntervalRef.current)
           clearInterval(durationIntervalRef.current);
         if (recordingRef.current) {
@@ -137,28 +135,25 @@ const VoiceRecorder = forwardRef(
         };
       }
       if (phase === PHASES.PROCESSING) {
-        const animateDots = () => {
-          dotAnim.forEach((anim, i) => {
-            Animated.sequence([
-              Animated.delay(i * 180),
-              Animated.loop(
-                Animated.sequence([
-                  Animated.timing(anim, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                  }),
-                  Animated.timing(anim, {
-                    toValue: 0.3,
-                    duration: 400,
-                    useNativeDriver: true,
-                  }),
-                ]),
-              ),
-            ]).start();
-          });
-        };
-        animateDots();
+        dotAnim.forEach((anim, i) => {
+          Animated.sequence([
+            Animated.delay(i * 180),
+            Animated.loop(
+              Animated.sequence([
+                Animated.timing(anim, {
+                  toValue: 1,
+                  duration: 400,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(anim, {
+                  toValue: 0.3,
+                  duration: 400,
+                  useNativeDriver: true,
+                }),
+              ]),
+            ),
+          ]).start();
+        });
       }
     }, [phase]);
 
@@ -197,6 +192,7 @@ const VoiceRecorder = forwardRef(
         recordingRef.current = recording;
         setPhase(PHASES.RECORDING);
         setDuration(0);
+        onRecordingStart?.(); // ← notify parent recording has started
         durationIntervalRef.current = setInterval(() => {
           setDuration((prev) => {
             const next = prev + 1000;
@@ -262,7 +258,6 @@ const VoiceRecorder = forwardRef(
       }
     };
 
-    // Idle
     const renderIdle = () => (
       <View style={styles.stateWrap}>
         <Text style={styles.idleHint}>Tap to start recording</Text>
@@ -283,14 +278,12 @@ const VoiceRecorder = forwardRef(
       </View>
     );
 
-    // Recording
     const renderRecording = () => (
       <View style={styles.stateWrap}>
         <View style={styles.durationRow}>
           <View style={styles.recDot} />
           <Text style={styles.durationText}>{formatDuration(duration)}</Text>
         </View>
-
         <View style={styles.pulseWrap}>
           <Animated.View
             style={[
@@ -314,7 +307,6 @@ const VoiceRecorder = forwardRef(
             <View style={styles.stopIcon} />
           </TouchableOpacity>
         </View>
-
         <View style={styles.waveform}>
           {waveformValues.map((anim, i) => (
             <Animated.View
@@ -326,14 +318,12 @@ const VoiceRecorder = forwardRef(
             />
           ))}
         </View>
-
         <TouchableOpacity onPress={cancelRecording} style={styles.cancelBtn}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>
     );
 
-    // Processing
     const renderProcessing = () => (
       <View style={styles.stateWrap}>
         <View style={styles.processingCard}>
@@ -358,7 +348,6 @@ const VoiceRecorder = forwardRef(
       </View>
     );
 
-    // Done
     const renderDone = () => (
       <View style={styles.stateWrap}>
         <View style={styles.doneCard}>
@@ -368,7 +357,6 @@ const VoiceRecorder = forwardRef(
           </View>
           <Text style={styles.doneTitle}>Post ready</Text>
           <Text style={styles.doneSub}>Review and edit before publishing</Text>
-
           <TouchableOpacity
             onPress={onReviewPost}
             style={styles.reviewButton}
@@ -376,7 +364,6 @@ const VoiceRecorder = forwardRef(
           >
             <Text style={styles.reviewButtonText}>Review Post →</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={() => {
               setPhase(PHASES.IDLE);
@@ -391,7 +378,6 @@ const VoiceRecorder = forwardRef(
       </View>
     );
 
-    // Error
     const renderError = () => (
       <View style={styles.stateWrap}>
         <View style={styles.errorCard}>
@@ -417,7 +403,6 @@ const VoiceRecorder = forwardRef(
         {phase === PHASES.ERROR && renderError()}
       </View>
     );
-    // ── CHANGE 3: closing }); instead of }; because of forwardRef wrapper ──
   },
 );
 
@@ -438,21 +423,10 @@ const createStyles = (theme, isDarkMode) =>
       shadowRadius: 16,
       elevation: 8,
     },
-    reviewButtonText: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: "#fff",
-    },
-    recordAgainButton: {
-      paddingTop: 14,
-      alignItems: "center",
-    },
-    recordAgainText: {
-      fontSize: 14,
-      color: theme.textMuted,
-    },
+    reviewButtonText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+    recordAgainButton: { paddingTop: 14, alignItems: "center" },
+    recordAgainText: { fontSize: 14, color: theme.textMuted },
 
-    // Idle
     idleHint: {
       fontSize: 12,
       letterSpacing: 1.5,
@@ -508,7 +482,6 @@ const createStyles = (theme, isDarkMode) =>
       textAlign: "center",
     },
 
-    // Recording
     durationRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -575,7 +548,6 @@ const createStyles = (theme, isDarkMode) =>
     cancelBtn: { paddingVertical: 10, paddingHorizontal: 24 },
     cancelText: { fontSize: 13, color: theme.textMuted },
 
-    // Processing
     processingCard: { alignItems: "center", padding: 32 },
     processingIconWrap: {
       width: 60,
@@ -640,7 +612,6 @@ const createStyles = (theme, isDarkMode) =>
       backgroundColor: theme.accent,
     },
 
-    // Done
     doneCard: { alignItems: "center", padding: 32 },
     doneCheckWrap: {
       width: 60,
@@ -678,7 +649,6 @@ const createStyles = (theme, isDarkMode) =>
     },
     doneSub: { fontSize: 12, color: theme.textMuted },
 
-    // Error
     errorCard: { alignItems: "center", padding: 32 },
     errorIconWrap: {
       width: 60,

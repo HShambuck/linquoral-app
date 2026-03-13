@@ -1,5 +1,5 @@
 // app/(tabs)/record.js
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,14 @@ import { useDrafts } from '../../src/context/DraftContext';
 import VoiceRecorder from '../../src/components/VoiceRecorder';
 import ToneSelector from '../../src/components/ToneSelector';
 
+// Phases owned by this screen (recording phase is owned by VoiceRecorder internally)
+const SCREEN_PHASES = {
+  IDLE: 'idle',
+  RECORDING: 'recording', // set via onRecordingStart callback
+  PROCESSING: 'processing',
+  DONE: 'done',
+};
+
 export default function RecordScreen() {
   const router = useRouter();
   const { theme, isDarkMode } = useTheme();
@@ -16,54 +24,70 @@ export default function RecordScreen() {
   const insets = useSafeAreaInsets();
 
   const [selectedTone, setSelectedTone] = useState('Professional');
-  const [phase, setPhase] = useState('idle');
+  const [phase, setPhase] = useState(SCREEN_PHASES.IDLE);
   const [recorderKey, setRecorderKey] = useState(0);
-  const voiceRecorderRef = useRef(null); // ← ref to call setDone/setError on VoiceRecorder
+  const voiceRecorderRef = useRef(null);
 
   const styles = createStyles(theme, isDarkMode, insets);
 
-  // Reset everything when navigating away from this screen
+  // Reset when navigating away
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       return () => {
-        setPhase('idle');
-        setRecorderKey(k => k + 1); // forces VoiceRecorder to fully remount = clean slate
+        setPhase(SCREEN_PHASES.IDLE);
+        setRecorderKey((k) => k + 1);
       };
     }, [])
   );
 
   const handleBack = () => {
-    if (phase === 'recording') {
+    if (phase === SCREEN_PHASES.RECORDING) {
       Alert.alert('Cancel Recording?', 'Your recording will be lost.', [
         { text: 'Continue Recording', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => router.back() },
+        {
+          text: 'Discard', style: 'destructive',
+          onPress: () => router.back(),
+        },
       ]);
+    } else if (phase === SCREEN_PHASES.PROCESSING) {
+      Alert.alert('Processing in progress', 'Please wait for your post to finish processing.');
     } else {
       router.back();
     }
   };
 
-  const handleRecordingComplete = async ({ uri }) => {
-    setPhase('processing');
+  // VoiceRecorder calls this when it starts recording
+  const handleRecordingStart = useCallback(() => {
+    setPhase(SCREEN_PHASES.RECORDING);
+  }, []);
+
+  const handleRecordingComplete = useCallback(async ({ uri }) => {
+    setPhase(SCREEN_PHASES.PROCESSING);
     const result = await processVoiceRecording(uri, selectedTone);
     if (result.success) {
-      // Tell VoiceRecorder to instantly switch to DONE state — shows Post ready + Review Post button
+      setPhase(SCREEN_PHASES.DONE);
       voiceRecorderRef.current?.setDone();
     } else {
-      // Tell VoiceRecorder to show error state with the message
       voiceRecorderRef.current?.setError(result.error || 'Processing failed');
-      setPhase('idle');
+      setPhase(SCREEN_PHASES.IDLE);
     }
-  };
+  }, [processVoiceRecording, selectedTone]);
 
-  const handleReviewPost = () => {
+  const handleReviewPost = useCallback(() => {
     const id = currentDraft?.id || currentDraft?._id;
     if (id) {
       router.push(`/editor/${id}`);
     } else {
       Alert.alert('Error', 'Could not find draft. Please try again.');
     }
-  };
+  }, [currentDraft, router]);
+
+  const handleError = useCallback((err) => {
+    Alert.alert('Recording Error', err.message || 'An error occurred.');
+    setPhase(SCREEN_PHASES.IDLE);
+  }, []);
+
+  const isIdle = phase === SCREEN_PHASES.IDLE || phase === SCREEN_PHASES.RECORDING;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -83,7 +107,7 @@ export default function RecordScreen() {
         </View>
 
         {/* Tone Selector — only visible when idle or recording */}
-        {(phase === 'idle' || phase === 'recording') && (
+        {isIdle && (
           <View style={styles.toneSection}>
             <ToneSelector selectedTone={selectedTone} onSelectTone={setSelectedTone} />
           </View>
@@ -94,13 +118,11 @@ export default function RecordScreen() {
           <VoiceRecorder
             key={recorderKey}
             ref={voiceRecorderRef}
+            onRecordingStart={handleRecordingStart}
             onRecordingComplete={handleRecordingComplete}
-            onProcessingStart={() => setPhase('processing')}
+            onProcessingStart={() => setPhase(SCREEN_PHASES.PROCESSING)}
             onReviewPost={handleReviewPost}
-            onError={(err) => {
-              Alert.alert('Recording Error', err.message || 'An error occurred.');
-              setPhase('idle');
-            }}
+            onError={handleError}
             processingMessage="Refining your post..."
           />
         </View>
@@ -129,8 +151,7 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   },
   backBtnText: { fontSize: 22, color: theme.textSecondary, marginTop: -2 },
   title: {
-    flex: 1,
-    fontSize: 18, fontWeight: '700',
+    flex: 1, fontSize: 18, fontWeight: '700',
     color: theme.text, letterSpacing: -0.3,
   },
   tonePill: {

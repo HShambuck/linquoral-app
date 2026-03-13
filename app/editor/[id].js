@@ -302,7 +302,7 @@ export default function EditorScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSub}>
-              Say your edit instructions, e.g. "make it shorter" or "add a call to action"
+              {'Say your edit instructions, e.g. "make it shorter" or "add a call to action'}
             </Text>
             {isApplyingVoiceEdit ? (
               <View style={styles.applyingWrap}>

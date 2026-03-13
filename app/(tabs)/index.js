@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, RefreshControl, Animated,
+  ScrollView, RefreshControl, Animated, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +25,8 @@ export default function HomeScreen() {
   const fadeAnim = useState(new Animated.Value(0))[0];
 
   const styles = createStyles(theme, isDarkMode, insets);
+
+  const profilePicture = user?.linkedIn?.picture || null;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -58,14 +60,21 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.headline}>What's on{'\n'}your mind?</Text>
+            <Text style={styles.headline}>{"What's on '\n'your mind?"}</Text>
           </View>
           <TouchableOpacity
             style={styles.avatar}
             onPress={() => router.push('/(tabs)/settings')}
             activeOpacity={0.8}
           >
-            <Text style={styles.avatarText}>{user?.initials || 'U'}</Text>
+            {profilePicture ? (
+              <Image
+                source={{ uri: profilePicture }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{user?.initials || 'U'}</Text>
+            )}
             <View style={styles.avatarRing} />
           </TouchableOpacity>
         </View>
@@ -163,29 +172,21 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   },
   headerLeft: { flex: 1 },
   greeting: {
-    fontSize: 11,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    color: theme.textMuted,
-    marginBottom: 6,
-    fontWeight: '500',
+    fontSize: 11, letterSpacing: 2,
+    textTransform: 'uppercase', color: theme.textMuted,
+    marginBottom: 6, fontWeight: '500',
   },
   headline: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.text,
-    lineHeight: 34,
-    letterSpacing: -0.5,
+    fontSize: 28, fontWeight: '700',
+    color: theme.text, lineHeight: 34, letterSpacing: -0.5,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 42, height: 42, borderRadius: 21,
     backgroundColor: theme.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: 4, overflow: 'hidden',
   },
+  avatarImage: { width: 42, height: 42, borderRadius: 21 },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 15, letterSpacing: 0.5 },
   avatarRing: {
     position: 'absolute', width: 48, height: 48,
@@ -194,54 +195,33 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   },
 
   primaryCta: {
-    borderRadius: 20,
-    backgroundColor: theme.primary,
-    marginBottom: 14,
-    overflow: 'hidden',
+    borderRadius: 20, backgroundColor: theme.primary,
+    marginBottom: 14, overflow: 'hidden',
     shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: isDarkMode ? 0.4 : 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowRadius: 20, elevation: 10,
   },
   primaryCtaInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    paddingRight: 18,
+    flexDirection: 'row', alignItems: 'center',
+    padding: 20, paddingRight: 18,
   },
   primaryCtaIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 48, height: 48, borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+    justifyContent: 'center', alignItems: 'center', marginRight: 16,
   },
   micIconOuter: {
-    width: 18, height: 22,
-    borderRadius: 9,
-    borderWidth: 2.5,
-    borderColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 18, height: 22, borderRadius: 9,
+    borderWidth: 2.5, borderColor: '#fff',
+    justifyContent: 'center', alignItems: 'center',
   },
-  micIconInner: {
-    width: 7, height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#fff',
-  },
+  micIconInner: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#fff' },
   micIconBase: {
-    position: 'absolute',
-    bottom: -7,
-    width: 14,
-    height: 6,
-    borderBottomLeftRadius: 7,
-    borderBottomRightRadius: 7,
-    borderWidth: 2.5,
-    borderTopWidth: 0,
-    borderColor: '#fff',
+    position: 'absolute', bottom: -7,
+    width: 14, height: 6,
+    borderBottomLeftRadius: 7, borderBottomRightRadius: 7,
+    borderWidth: 2.5, borderTopWidth: 0, borderColor: '#fff',
   },
   primaryCtaText: { flex: 1 },
   primaryCtaTitle: { fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 3, letterSpacing: -0.2 },
@@ -258,23 +238,17 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   },
 
   continueDraft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center',
+    padding: 16, borderRadius: 16,
     backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    marginBottom: 22,
+    borderWidth: 1, borderColor: theme.border, marginBottom: 22,
   },
   continueDraftDot: {
     width: 8, height: 8, borderRadius: 4,
-    backgroundColor: theme.accent,
-    marginRight: 14,
+    backgroundColor: theme.accent, marginRight: 14,
     shadowColor: theme.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
+    shadowOpacity: 0.8, shadowRadius: 4,
   },
   continueDraftContent: { flex: 1 },
   continueDraftLabel: { fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: theme.accent, marginBottom: 3, fontWeight: '600' },
@@ -286,16 +260,12 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: theme.surface,
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: theme.border,
-    marginBottom: 22,
-    overflow: 'hidden',
+    borderWidth: 1, borderColor: theme.border,
+    marginBottom: 22, overflow: 'hidden',
   },
   statCard: {
-    flex: 1,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, paddingVertical: 18,
+    alignItems: 'center', justifyContent: 'center',
   },
   statDivider: {
     position: 'absolute', right: 0, top: '20%', bottom: '20%',
@@ -305,13 +275,10 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
   statLabel: { fontSize: 10, color: theme.textMuted, marginTop: 3, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   insightCard: {
-    padding: 18,
-    borderRadius: 16,
+    padding: 18, borderRadius: 16,
     backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.accent,
+    borderWidth: 1, borderColor: theme.border,
+    borderLeftWidth: 3, borderLeftColor: theme.accent,
   },
   insightHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   insightDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent, marginRight: 8 },

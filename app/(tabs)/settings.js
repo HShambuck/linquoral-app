@@ -3,15 +3,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../../src/context/UserContext';
-import { useUser } from '../../src/context/UserContext';
+import { useTheme, useUser } from '../../src/context/UserContext';
 import { useAuth } from '../../src/context/AuthContext';
 import ToneSelector from '../../src/components/ToneSelector';
-import useLinkedInAuth from '../../src/hooks/useLinkedInAuth';
+import { useLinkedInAuth } from '../../src/hooks/useLinkedInAuth';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -20,25 +19,26 @@ export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const [showToneSelector, setShowToneSelector] = useState(false);
-  const [defaultTone, setDefaultTone] = useState('Professional');
+  const [defaultTone, setDefaultTone] = useState(user?.preferredTone || 'Professional');
 
   const {
-    status: linkedInStatus,
-    isLoading: linkedInLoading,
-    error: linkedInError,
-    connect: connectLinkedIn,
+    connectLinkedIn,
     disconnect: disconnectLinkedIn,
-    refresh: refreshLinkedIn,
+    isConnecting: linkedInLoading,
+    error: linkedInError,
   } = useLinkedInAuth();
 
   const styles = createStyles(theme, isDarkMode, insets);
 
-  // Resolve display name and subtitle for profile card
+  const isLinkedInConnected = user?.linkedIn?.connected || false;
+  const linkedInProfile = isLinkedInConnected ? user.linkedIn : null;
+  const profilePicture = linkedInProfile?.picture || null;
+
   const displayName = user?.displayName || user?.name || 'Your Name';
   const profileInitial = displayName.charAt(0).toUpperCase();
-  const profileSubtitle = linkedInStatus?.connected && linkedInStatus?.profile
-    ? `${linkedInStatus.profile.firstName} ${linkedInStatus.profile.lastName} · LinkedIn`
-    : user?.email || 'Not connected to LinkedIn';
+  const profileSubtitle = isLinkedInConnected && linkedInProfile
+    ? `${linkedInProfile.firstName} ${linkedInProfile.lastName} · LinkedIn`
+    : 'Not connected to LinkedIn';
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -77,10 +77,17 @@ export default function SettingsScreen() {
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{profileInitial}</Text>
-            </View>
-            <View style={styles.onlineDot} />
+            {profilePicture ? (
+              <Image source={{ uri: profilePicture }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{profileInitial}</Text>
+              </View>
+            )}
+            <View style={[
+              styles.onlineDot,
+              { backgroundColor: isLinkedInConnected ? theme.accent : theme.border }
+            ]} />
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayName}</Text>
@@ -97,25 +104,17 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.linkedInInfo}>
-              {linkedInStatus.connected ? (
+              {isLinkedInConnected ? (
                 <>
                   <View style={styles.statusRow}>
                     <View style={[styles.statusDot, { backgroundColor: theme.accent }]} />
                     <Text style={[styles.statusText, { color: theme.accent }]}>Connected</Text>
                   </View>
-                  {linkedInStatus.profile && (
+                  {linkedInProfile && (
                     <Text style={styles.linkedInName}>
-                      {linkedInStatus.profile.firstName} {linkedInStatus.profile.lastName}
+                      {linkedInProfile.firstName} {linkedInProfile.lastName}
                     </Text>
                   )}
-                </>
-              ) : linkedInStatus.devTokenActive ? (
-                <>
-                  <View style={styles.statusRow}>
-                    <View style={[styles.statusDot, { backgroundColor: theme.warning }]} />
-                    <Text style={[styles.statusText, { color: theme.warning }]}>Dev Token Active</Text>
-                  </View>
-                  <Text style={styles.linkedInSubtext}>Your account only · testing mode</Text>
                 </>
               ) : (
                 <>
@@ -129,35 +128,29 @@ export default function SettingsScreen() {
             </View>
 
             <TouchableOpacity
-              onPress={linkedInStatus.connected ? handleDisconnectLinkedIn : connectLinkedIn}
+              onPress={isLinkedInConnected ? handleDisconnectLinkedIn : connectLinkedIn}
               style={[
                 styles.linkedInBtn,
-                linkedInStatus.connected && styles.linkedInBtnDisconnect,
+                isLinkedInConnected && styles.linkedInBtnDisconnect,
               ]}
               activeOpacity={0.8}
               disabled={linkedInLoading}
             >
               {linkedInLoading ? (
                 <ActivityIndicator
-                  color={linkedInStatus.connected ? theme.danger : '#fff'}
+                  color={isLinkedInConnected ? theme.danger : '#fff'}
                   size="small"
                 />
               ) : (
                 <Text style={[
                   styles.linkedInBtnText,
-                  linkedInStatus.connected && { color: theme.danger },
+                  isLinkedInConnected && { color: theme.danger },
                 ]}>
-                  {linkedInStatus.connected ? 'Disconnect' : 'Connect'}
+                  {isLinkedInConnected ? 'Disconnect' : 'Connect'}
                 </Text>
               )}
             </TouchableOpacity>
           </View>
-
-          {!linkedInStatus.connected && !linkedInLoading && (
-            <TouchableOpacity onPress={refreshLinkedIn} style={styles.refreshRow} activeOpacity={0.6}>
-              <Text style={styles.refreshText}>Refresh status</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Appearance */}
@@ -285,11 +278,13 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
     backgroundColor: theme.primary,
     justifyContent: 'center', alignItems: 'center',
   },
+  avatarImage: {
+    width: 52, height: 52, borderRadius: 16,
+  },
   avatarText: { fontSize: 22, fontWeight: '700', color: '#fff' },
   onlineDot: {
     position: 'absolute', bottom: 0, right: 0,
     width: 12, height: 12, borderRadius: 6,
-    backgroundColor: theme.accent,
     borderWidth: 2, borderColor: theme.surface,
   },
   profileInfo: { flex: 1 },
@@ -353,8 +348,6 @@ const createStyles = (theme, isDarkMode, insets) => StyleSheet.create({
     borderWidth: 1, borderColor: theme.danger,
   },
   linkedInBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
-  refreshRow: { alignItems: 'center', paddingVertical: 6 },
-  refreshText: { fontSize: 12, color: theme.textMuted },
 
   toggle: {
     width: 46, height: 27, borderRadius: 14,

@@ -38,6 +38,13 @@ export default function RootLayout() {
                   <Stack.Screen name="(auth)" />
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen
+                    name="upgrade"
+                    options={{
+                      headerShown: false,
+                      animation: "slide_from_bottom",
+                    }}
+                  />
+                  <Stack.Screen
                     name="linkedin-connected"
                     options={{
                       headerShown: false,

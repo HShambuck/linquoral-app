@@ -20,6 +20,7 @@ import { useDrafts } from "../../src/context/DraftContext";
 import { useTheme } from "../../src/context/UserContext";
 import { TIPS, getGreeting } from "../../src/utils/constants";
 import { formatRelativeTime } from "../../src/utils/validators";
+import UsageBanner from '../../src/components/UsageBanner';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -92,6 +93,8 @@ export default function HomeScreen() {
             <View style={styles.avatarRing} />
           </TouchableOpacity>
         </View>
+
+        <UsageBanner />
 
         {/* Primary CTA */}
         <TouchableOpacity
